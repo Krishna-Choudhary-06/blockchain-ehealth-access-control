@@ -1,0 +1,25 @@
+# Node modules - never share these
+node_modules/
+npm-debug.log
+
+# Environment files - contains secrets
+.env
+*.env
+
+# Fabric generated files
+organizations/
+channel-artifacts/
+system-genesis-block/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Keys and certificates - security sensitive
+*.pem
+*.key
+*.crt
