@@ -1,4 +1,8 @@
 const crypto = require("crypto");
+const {
+    publicEncrypt,
+    privateDecrypt
+} = require("crypto");
 
 function encryptFile(fileBuffer) {
 
@@ -42,8 +46,39 @@ function decryptFile(
 
     return decryptedData;
 }
+function encryptKeyForUser(
+    symmetricKey,
+    publicKey
+) {
 
+    const encryptedKey =
+        publicEncrypt(
+            publicKey,
+            Buffer.from(symmetricKey)
+        );
+
+    return encryptedKey.toString("base64");
+}
+
+function decryptKeyForUser(
+    encryptedKey,
+    privateKey
+) {
+
+    const decryptedKey =
+        privateDecrypt(
+            privateKey,
+            Buffer.from(
+                encryptedKey,
+                "base64"
+            )
+        );
+
+    return decryptedKey.toString();
+}
 module.exports = {
     encryptFile,
-    decryptFile
+    decryptFile,
+    encryptKeyForUser,
+    decryptKeyForUser
 };
