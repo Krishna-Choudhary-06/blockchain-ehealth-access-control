@@ -76,9 +76,28 @@ function decryptKeyForUser(
 
     return decryptedKey.toString();
 }
+function shareKeyWithUsers(
+    symmetricKey,
+    users
+) {
+
+    const sharedKeys = {};
+
+    for (const user of users) {
+
+        sharedKeys[user.userId] =
+            encryptKeyForUser(
+                symmetricKey,
+                user.publicKey
+            );
+    }
+
+    return sharedKeys;
+}
 module.exports = {
     encryptFile,
     decryptFile,
     encryptKeyForUser,
-    decryptKeyForUser
+    decryptKeyForUser,
+    shareKeyWithUsers
 };
