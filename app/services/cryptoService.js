@@ -94,10 +94,48 @@ function shareKeyWithUsers(
 
     return sharedKeys;
 }
+function revokeUserAccess(
+    sharedKeys,
+    userId
+) {
+
+    const updatedKeys = {
+        ...sharedKeys
+    };
+
+    delete updatedKeys[userId];
+
+    return updatedKeys;
+}
+function generateUserKeyPair() {
+
+    const {
+        publicKey,
+        privateKey
+    } = crypto.generateKeyPairSync(
+        "rsa",
+        {
+            modulusLength: 2048
+        }
+    );
+
+    return {
+        publicKey: publicKey.export({
+            type: "pkcs1",
+            format: "pem"
+        }),
+        privateKey: privateKey.export({
+            type: "pkcs1",
+            format: "pem"
+        })
+    };
+}
 module.exports = {
     encryptFile,
     decryptFile,
     encryptKeyForUser,
     decryptKeyForUser,
-    shareKeyWithUsers
+    shareKeyWithUsers,
+    revokeUserAccess,
+    generateUserKeyPair
 };
