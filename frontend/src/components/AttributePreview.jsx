@@ -1,7 +1,6 @@
 import React from 'react'
 import { Check, X, Shield, Cpu, Lock, HelpCircle } from 'lucide-react'
 
-// Permission configuration per role
 const rolePermissions = {
   Doctor: [
     { text: 'View Assigned Patient Records', allowed: true },
