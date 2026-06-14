@@ -1,8 +1,8 @@
 import { useAuth } from '../hooks/useAuth'
-import { useLocation } from 'react-router-dom'
+import { useLocation, Link } from 'react-router-dom'
 import { 
   FiGrid, FiUpload, FiClock, FiFileText, 
-  FiShield, FiActivity 
+  FiActivity, FiUser, FiUsers, FiSettings
 } from 'react-icons/fi'
 
 export default function Sidebar() {
@@ -13,18 +13,33 @@ export default function Sidebar() {
   const menus = {
     Patient: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
-      { name: 'Upload File', path: '#upload', icon: FiUpload },
-      { name: 'History', path: '#history', icon: FiClock }
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'My Records', path: '#my-records', icon: FiFileText },
+      { name: 'Who Accessed My Data', path: '#who-accessed', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
+      { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
     Doctor: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
-      { name: 'Records', path: '#records', icon: FiFileText },
-      { name: 'Logs', path: '#logs', icon: FiClock }
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
+      { name: 'Explorer', path: '/explorer', icon: FiActivity }
+    ],
+    Nurse: [
+      { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Lab Reports', path: '#lab-reports', icon: FiFileText },
+      { name: 'Access History', path: '#access-history', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
+      { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
     Admin: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
-      { name: 'System Logs', path: '#sys-logs', icon: FiShield },
-      { name: 'Performance', path: '#performance', icon: FiActivity }
+      { name: 'Users', path: '#users', icon: FiUsers },
+      { name: 'Access Logs', path: '#access-logs', icon: FiClock },
+      { name: 'Blockchain Explorer', path: '/explorer', icon: FiActivity },
+      { name: 'Performance Monitor', path: '/performance', icon: FiActivity },
+      { name: 'Settings', path: '#settings', icon: FiSettings }
     ]
   }
 
@@ -55,22 +70,39 @@ export default function Sidebar() {
           {activeMenu.map((item) => {
             const Icon = item.icon
             const isActive = location.pathname === item.path || (item.path.startsWith('#') && location.hash === item.path)
-            return (
+            const isHash = item.path.startsWith('#')
+            
+            const linkClasses = `flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group relative ${
+              isActive 
+                ? 'bg-purple-50 dark:bg-purple-900/10 text-purple-600 dark:text-purple-400 font-bold' 
+                : 'text-slate-650 hover:bg-slate-50 dark:text-slate-450 dark:hover:bg-slate-900/40 hover:text-slate-900 dark:hover:text-white'
+            }`
+
+            const iconElement = <Icon className={`w-5 h-5 mr-3 transition-transform duration-300 group-hover:scale-[1.08] ${isActive ? 'text-purple-600 dark:text-purple-400' : 'text-slate-405 dark:text-slate-500'}`} />
+            const activeIndicator = isActive && (
+              <span className="w-1 h-5 rounded-full bg-purple-600 dark:bg-purple-400 absolute left-0 top-1/2 transform -translate-y-1/2"></span>
+            )
+
+            return isHash ? (
               <a
                 key={item.name}
                 href={item.path}
-                className={`flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group relative ${
-                  isActive 
-                    ? 'bg-purple-50 dark:bg-purple-900/10 text-purple-600 dark:text-purple-400 font-bold' 
-                    : 'text-slate-650 hover:bg-slate-50 dark:text-slate-450 dark:hover:bg-slate-900/40 hover:text-slate-900 dark:hover:text-white'
-                }`}
+                className={linkClasses}
               >
-                <Icon className={`w-5 h-5 mr-3 transition-transform duration-300 group-hover:scale-[1.08] ${isActive ? 'text-purple-600 dark:text-purple-400' : 'text-slate-405 dark:text-slate-500'}`} />
+                {iconElement}
                 <span>{item.name}</span>
-                {isActive && (
-                  <span className="w-1 h-5 rounded-full bg-purple-600 dark:bg-purple-400 absolute left-0 top-1/2 transform -translate-y-1/2"></span>
-                )}
+                {activeIndicator}
               </a>
+            ) : (
+              <Link
+                key={item.name}
+                to={item.path}
+                className={linkClasses}
+              >
+                {iconElement}
+                <span>{item.name}</span>
+                {activeIndicator}
+              </Link>
             )
           })}
         </nav>
