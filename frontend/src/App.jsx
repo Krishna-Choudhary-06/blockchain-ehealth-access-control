@@ -6,6 +6,9 @@ import Home from './pages/Home'
 import Register from './pages/Register'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Upload from './pages/Upload'
+import Explorer from './pages/Explorer'
+import Performance from './pages/Performance'
 import { useAuth } from './hooks/useAuth'
 
 function PublicRoute({ children }) {
@@ -28,7 +31,7 @@ function App() {
         position="top-right" 
         toastOptions={{
           className: 'dark:bg-slate-900 dark:text-slate-100 dark:border-slate-800 border-slate-200 bg-white text-slate-800 border font-sans text-sm rounded-xl',
-          duration: 4000
+          duration: 4050
         }}
       />
       <Routes>
@@ -39,6 +42,9 @@ function App() {
 
         {/* Secure Dashboard View */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+        <Route path="/upload" element={<PrivateRoute><Upload /></PrivateRoute>} />
+        <Route path="/explorer" element={<PrivateRoute><Explorer /></PrivateRoute>} />
+        <Route path="/performance" element={<PrivateRoute><Performance /></PrivateRoute>} />
 
         {/* Fallback Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

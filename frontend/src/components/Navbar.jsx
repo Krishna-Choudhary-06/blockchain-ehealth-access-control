@@ -12,12 +12,28 @@ export default function Navbar() {
 
   const navLinks = [
     { name: 'Home Portal', to: '/' },
+    { name: 'About', to: '/#about' },
+    { name: 'How It Works', to: '/#how-it-works' },
+    { name: 'Features', to: '/#features' },
     { name: 'User Registration', to: '/register' },
     ...(isAuthenticated 
       ? [{ name: 'Secure Dashboard', to: '/dashboard' }]
       : [{ name: 'Sign In', to: '/login' }]
     )
   ]
+
+  const handleLinkClick = (e, to) => {
+    if (to.startsWith('/#')) {
+      const id = to.split('#')[1]
+      if (location.pathname === '/') {
+        e.preventDefault()
+        const element = document.getElementById(id)
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' })
+        }
+      }
+    }
+  }
 
   return (
     <nav className="border-b border-slate-200 dark:border-slate-900 bg-white/70 dark:bg-slate-950/70 backdrop-blur-md sticky top-0 z-50 transition-colors duration-300">
@@ -46,6 +62,7 @@ export default function Navbar() {
                 <Link
                   key={link.name}
                   to={link.to}
+                  onClick={(e) => handleLinkClick(e, link.to)}
                   className={`text-sm font-semibold tracking-wide transition-all duration-300 relative py-2 px-3.5 rounded-xl ${
                     isActive 
                       ? 'text-purple-600 dark:text-purple-400 bg-purple-500/5 dark:bg-purple-400/5 font-bold shadow-sm' 
@@ -99,7 +116,10 @@ export default function Navbar() {
                 <Link
                   key={link.name}
                   to={link.to}
-                  onClick={() => setIsOpen(false)}
+                  onClick={(e) => {
+                    setIsOpen(false)
+                    handleLinkClick(e, link.to)
+                  }}
                   className={`block text-sm font-semibold py-2 px-3 rounded-lg transition-all ${
                     isActive 
                       ? 'text-purple-600 dark:text-purple-400 bg-purple-500/5 dark:bg-purple-400/5' 
