@@ -1,27 +1,36 @@
 'use strict';
+
 const { Contract } = require('fabric-contract-api');
 
 class PrivacyLevel extends Contract {
 
-    async assignPrivacyLevel(ctx, userId, level) {
+    _getTimestamp(ctx) {
+        try {
+            const ts = ctx.stub.getTxTimestamp();
+            const secs = parseInt(ts.seconds.toString());
+            return new Date(secs * 1000).toISOString();
+        } catch(e) {
+            return new Date().toISOString();
+        }
+    }
 
-        // Validate level — L0 most private, L3 public
+    async assignLevel(ctx, userId, level) {
         const validLevels = ['L0', 'L1', 'L2', 'L3'];
         if (!validLevels.includes(level)) {
-            throw new Error('Invalid level. Use L0, L1, L2 or L3');
+            throw new Error('Invalid level. Use L0/L1/L2/L3');
         }
 
-        // Check user exists first
-        const userData = await ctx.stub.getState('USER_' + userId);
-        if (!userData || userData.length === 0) {
-            throw new Error('User not found. Register first.');
+        const userBytes = await ctx.stub.getState(
+            'USER_' + userId);
+        if (!userBytes || userBytes.length === 0) {
+            throw new Error('User not registered: ' + userId);
         }
 
         const record = {
             userId,
-            privacyLevel: level,
-            levelNumber: parseInt(level[1]),
-            assignedAt: new Date().toISOString()
+            level,
+            levelNum: parseInt(level.substring(1)),
+            assignedAt: this._getTimestamp(ctx)
         };
 
         await ctx.stub.putState(
@@ -32,12 +41,26 @@ class PrivacyLevel extends Contract {
         return JSON.stringify(record);
     }
 
-    async getUserLevel(ctx, userId) {
+    async getLevel(ctx, userId) {
         const data = await ctx.stub.getState('ACL_' + userId);
         if (!data || data.length === 0) {
-            throw new Error('No level assigned for: ' + userId);
+            throw new Error('No level for: ' + userId);
         }
         return data.toString();
+    }
+
+    async getAllLevels(ctx) {
+        const iterator = await ctx.stub.getStateByRange(
+            'ACL_', 'ACL_~');
+        const results = [];
+        let res = await iterator.next();
+        while (!res.done) {
+            results.push(JSON.parse(
+                res.value.value.toString()));
+            res = await iterator.next();
+        }
+        await iterator.close();
+        return JSON.stringify(results);
     }
 }
 
