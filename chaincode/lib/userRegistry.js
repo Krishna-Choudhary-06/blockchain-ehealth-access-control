@@ -6,13 +6,12 @@ const crypto = require('crypto');
 class UserRegistry extends Contract {
 
     _getTimestamp(ctx) {
-        try {
-            const ts = ctx.stub.getTxTimestamp();
-            const secs = parseInt(ts.seconds.toString());
-            return new Date(secs * 1000).toISOString();
-        } catch(e) {
-            return new Date().toISOString();
-        }
+        // MUST be deterministic across all peers - never use new Date()
+        const ts = ctx.stub.getTxTimestamp();
+        const secs = ts.seconds.low !== undefined
+            ? ts.seconds.low
+            : parseInt(ts.seconds.toString());
+        return new Date(secs * 1000).toISOString();
     }
 
     async registerUser(ctx, userId, publicKey, role) {

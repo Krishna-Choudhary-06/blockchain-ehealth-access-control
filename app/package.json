@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "main": "server.js",
   "dependencies": {
-    "ipfs-http-client": "^59.0.0"
+    "body-parser": "^2.3.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "fabric-ca-client": "^2.2.20",
+    "fabric-network": "^2.2.20",
+    "ipfs-http-client": "^59.0.0",
+    "multer": "^2.2.0"
   }
 }

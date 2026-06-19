@@ -22,4 +22,4 @@ logs/
 # Keys and certificates - security sensitive
 *.pem
 *.key
-*.crt
+*.crtapp/wallet/
