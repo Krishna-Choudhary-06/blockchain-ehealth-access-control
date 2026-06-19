@@ -1,61 +1,70 @@
 'use strict';
+
 const { Contract } = require('fabric-contract-api');
 
 class DataAccess extends Contract {
 
-    async requestData(ctx, requesterId, dataId) {
+    _getTimestamp(ctx) {
+        try {
+            const ts = ctx.stub.getTxTimestamp();
+            const secs = parseInt(ts.seconds.toString());
+            return new Date(secs * 1000).toISOString();
+        } catch(e) {
+            return new Date().toISOString();
+        }
+    }
 
-        // Step 1 — verify user certificate exists
-        const certData = await ctx.stub.getState('USER_' + requesterId);
-        if (!certData || certData.length === 0) {
+    async requestAccess(ctx, requesterId, dataId) {
+
+        const userBytes = await ctx.stub.getState(
+            'USER_' + requesterId);
+        if (!userBytes || userBytes.length === 0) {
             return JSON.stringify({
-                status: 'CERTIFICATION ERROR',
+                status: 'CERT_ERROR',
+                message: 'User not registered',
                 ipfsHash: null
             });
         }
 
-        // Step 2 — get requester privacy level
-        const aclData = await ctx.stub.getState('ACL_' + requesterId);
-        if (!aclData || aclData.length === 0) {
+        const aclBytes = await ctx.stub.getState(
+            'ACL_' + requesterId);
+        if (!aclBytes || aclBytes.length === 0) {
             return JSON.stringify({
-                status: 'NO PERMISSION - level not assigned',
+                status: 'NO_LEVEL',
+                message: 'No privacy level assigned',
                 ipfsHash: null
             });
         }
-        const requesterACL = JSON.parse(aclData.toString());
+        const acl = JSON.parse(aclBytes.toString());
 
-        // Step 3 — get the data record
-        const dataRecord = await ctx.stub.getState('DATA_' + dataId);
-        if (!dataRecord || dataRecord.length === 0) {
+        const dataBytes = await ctx.stub.getState(
+            'DATA_' + dataId);
+        if (!dataBytes || dataBytes.length === 0) {
             return JSON.stringify({
-                status: 'DATA NOT FOUND',
+                status: 'NOT_FOUND',
+                message: 'Data not found',
                 ipfsHash: null
             });
         }
-        const data = JSON.parse(dataRecord.toString());
+        const data = JSON.parse(dataBytes.toString());
 
-        // Step 4 — check access
-        // Lower number = more restricted
-        // User level must be <= data required level
-        const accessGranted =
-            requesterACL.levelNumber <= data.requiredLevelNumber;
+        const granted = acl.levelNum <= data.requiredLevelNum;
 
-        // Step 5 — log event on blockchain (immutable audit trail)
-        const logEntry = {
+        const log = {
             requesterId,
             dataId,
-            action: accessGranted ? 'ACCESS_GRANTED' : 'ACCESS_DENIED',
-            requesterLevel: requesterACL.privacyLevel,
+            action: granted ? 'GRANTED' : 'DENIED',
+            requesterLevel: acl.level,
             dataLevel: data.requiredLevel,
-            timestamp: new Date().toISOString()
+            time: this._getTimestamp(ctx)
         };
 
         await ctx.stub.putState(
             'LOG_' + ctx.stub.getTxID(),
-            Buffer.from(JSON.stringify(logEntry))
+            Buffer.from(JSON.stringify(log))
         );
 
-        if (accessGranted) {
+        if (granted) {
             return JSON.stringify({
                 status: 'ACCESS_GRANTED',
                 ipfsHash: data.ipfsHash,
@@ -64,19 +73,23 @@ class DataAccess extends Contract {
         }
 
         return JSON.stringify({
-            status: 'NO PERMISSION',
+            status: 'ACCESS_DENIED',
+            message: 'Insufficient access level',
             ipfsHash: null
         });
     }
 
-    async getAccessLogs(ctx) {
-        const iterator = await ctx.stub.getStateByRange('LOG_', 'LOG_~');
+    async getLogs(ctx) {
+        const iterator = await ctx.stub.getStateByRange(
+            'LOG_', 'LOG_~');
         const logs = [];
-        let result = await iterator.next();
-        while (!result.done) {
-            logs.push(JSON.parse(result.value.value.toString()));
-            result = await iterator.next();
+        let res = await iterator.next();
+        while (!res.done) {
+            logs.push(JSON.parse(
+                res.value.value.toString()));
+            res = await iterator.next();
         }
+        await iterator.close();
         return JSON.stringify(logs);
     }
 }

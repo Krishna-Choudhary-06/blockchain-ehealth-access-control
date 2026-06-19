@@ -1,13 +1,15 @@
 {
   "name": "health-chaincode",
   "version": "1.0.0",
-  "description": "Blockchain E-Health Access Control Chaincode",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "fabric-chaincode-node server --chaincode-address=$CHAINCODE_SERVER_ADDRESS --chaincode-id=$CHAINCODE_ID"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
-    "fabric-contract-api": "^2.5.0",
-    "fabric-shim": "^2.5.0"
+    "fabric-contract-api": "2.5.3",
+    "fabric-shim": "2.5.3"
   }
 }
