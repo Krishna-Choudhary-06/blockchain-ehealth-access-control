@@ -5,12 +5,19 @@ const { Contract } = require('fabric-contract-api');
 class DataAccess extends Contract {
 
     _getTimestamp(ctx) {
-        // MUST be deterministic across all peers - never use new Date()
-        const ts = ctx.stub.getTxTimestamp();
-        const secs = ts.seconds.low !== undefined
-            ? ts.seconds.low
-            : parseInt(ts.seconds.toString());
-        return new Date(secs * 1000).toISOString();
+        try {
+            const ts = ctx.stub.getTxTimestamp();
+            if (ts && ts.seconds) {
+                const secs = ts.seconds.low !== undefined ? ts.seconds.low : parseInt(ts.seconds.toString());
+                return new Date(secs * 1000).toISOString();
+            } else if (ts && typeof ts.getSeconds === 'function') {
+                return new Date(ts.getSeconds() * 1000).toISOString();
+            } else {
+                return 'TxID-' + ctx.stub.getTxID();
+            }
+        } catch(e) {
+            return 'TxID-' + ctx.stub.getTxID();
+        }
     }
 
     async requestAccess(ctx, requesterId, dataId) {

@@ -6,7 +6,7 @@ import {
   FiAlertCircle, FiArrowRight, FiShield 
 } from 'react-icons/fi'
 import { encryptFile, shareKeyWithUsers } from '../services/cryptoService'
-import { uploadFile } from '../services/ipfsService'
+import { uploadRecord } from '../services/apiService'
 
 
 export default function Upload() {
@@ -189,13 +189,22 @@ export default function Upload() {
       setProgress(50)
       setCurrentStep('Generating AES-256 Symmetric Key and unique IV vector...')
 
-      // 3. Upload encrypted data to IPFS
+      // 3. Instead of IPFS upload locally, we'll send it to the backend which does it!
       setProgress(70)
-      setCurrentStep('Uploading encrypted ciphertext block to IPFS nodes...')
-      const cid = await uploadFile(encryptedData)
-
-      setProgress(85)
-      setCurrentStep('Invoking smart contract storeDataHash on Hyperledger Fabric ledger...')
+      setCurrentStep('Sending encrypted data to Backend for IPFS + Blockchain ledger upload...')
+      
+      const fileId = reportId || 'DATA-' + Math.floor(1000 + Math.random() * 9000);
+      
+      // We need to send it as a Blob/File
+      const encryptedBlob = new Blob([encryptedData], { type: 'application/octet-stream' })
+      const encryptedFileObj = new File([encryptedBlob], `${file.name}.enc`, { type: 'application/octet-stream' })
+      
+      const apiResult = await uploadRecord(patientName.replace(/ /g, ''), fileId, sensitivityLevel, encryptedFileObj)
+      
+      if (!apiResult.success) throw new Error(apiResult.error || 'Upload failed at backend')
+      
+      // Getting back the IPFS Hash from the backend
+      const cid = apiResult.data?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
 
       // 4. Secure key sharing (RSA-OAEP)
       // Retrieve registered users to encrypt the AES key with their public keys

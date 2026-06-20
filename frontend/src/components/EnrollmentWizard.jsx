@@ -8,6 +8,7 @@ import {
   Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X 
 } from 'lucide-react'
 import { generateUserKeyPair, getDelay } from '../services/cryptoService'
+import { registerUser, assignLevel } from '../services/apiService'
 import StepProgress from './StepProgress'
 import RoleSelector from './RoleSelector'
 import DynamicRegistrationForm from './DynamicRegistrationForm'
@@ -150,6 +151,23 @@ export default function EnrollmentWizard() {
       await new Promise(resolve => setTimeout(resolve, getDelay(1000)))
       
       const identityId = 'UID-' + Math.floor(100000 + Math.random() * 900000)
+      
+      // CALL BACKEND API TO REGISTER USER
+      setEnrollmentProgress('Registering identity on Hyperledger Fabric backend...')
+      toast.loading('Registering identity on Hyperledger Fabric backend...', { id: toastId })
+      const apiResult = await registerUser(identityId, keyPair.publicKey, formData.role)
+      if (!apiResult.success) throw new Error(apiResult.error || 'Registration failed')
+      
+      // Assign privacy level
+      let securityLvl = 'L1'
+      if (formData.role === 'Admin') securityLvl = 'L3'
+      else if (formData.role === 'Doctor') securityLvl = 'L2'
+      else if (formData.role === 'Nurse') securityLvl = 'L2'
+      if (formData.securityLevel) securityLvl = 'L' + formData.securityLevel
+
+      setEnrollmentProgress('Assigning Privacy Level on Fabric...')
+      await assignLevel(identityId, securityLvl)
+
       const mockTxHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
       
       // Determine Organization display value
