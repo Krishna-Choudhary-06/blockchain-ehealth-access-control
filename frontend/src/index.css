@@ -4,6 +4,24 @@
 
 @theme {
   --font-sans: "Outfit", system-ui, -apple-system, sans-serif;
+  --color-slate-105: #f8fafc;
+  --color-slate-150: #f1f5f9;
+  --color-slate-202: #e2e8f0;
+  --color-slate-205: #cbd5e1;
+  --color-slate-250: #94a3b8;
+  --color-slate-355: #cbd5e1;
+  --color-slate-405: #94a3b8;
+  --color-slate-450: #64748b;
+  --color-slate-455: #475569;
+  --color-slate-505: #475569;
+  --color-slate-550: #334155;
+  --color-slate-850: #1e293b;
+  --color-slate-855: #0f172a;
+  --color-slate-905: #0b0f19;
+  --color-slate-955: #030712;
+  --color-purple-650: #7c3aed;
+  --color-purple-655: #6d28d9;
+  --color-slate-650: #475569;
 }
 
 @utility animate-fade-in-up {

@@ -25,12 +25,6 @@ const rolePermissions = {
     { text: 'Process Insurance Claims', allowed: true },
     { text: 'Access Department Financials', allowed: true },
     { text: 'Access Clinical Diagnostics Data', allowed: false }
-  ],
-  Admin: [
-    { text: 'Manage Users & Role Registry', allowed: true },
-    { text: 'Audit Access Policy Logs', allowed: true },
-    { text: 'Configure Consensus Parameters', allowed: true },
-    { text: 'View Patient Clinical Data', allowed: false }
   ]
 }
 
@@ -100,14 +94,7 @@ export default function AttributePreview({ formData }) {
           </div>
         )}
 
-        {role === 'Admin' && securityLevel && (
-          <div className="pt-2 border-t border-slate-200/50 dark:border-slate-900/50">
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Clearance Level</span>
-            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-              <Lock className="w-3.5 h-3.5" /> Level-{securityLevel} Administration Authority
-            </span>
-          </div>
-        )}
+
       </div>
 
       {/* Permissions List */}
@@ -156,9 +143,7 @@ export default function AttributePreview({ formData }) {
                 org: organization || 'UNKNOWN',
                 ...(department && { dept: department }),
                 ...(patientId && { patient_id: patientId }),
-                ...(adminId && { admin_id: adminId }),
-                ...(employeeId && { employee_id: employeeId }),
-                ...(securityLevel && { clearance: securityLevel })
+                ...(employeeId && { employee_id: employeeId })
               },
               consensus_access_control: role ? 'ABAC_V2' : 'DEFAULT'
             },

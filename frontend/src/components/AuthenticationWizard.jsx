@@ -11,7 +11,7 @@ import RoleVerification from './RoleVerification'
 import LoginForm from './LoginForm'
 import BlockchainVerification from './BlockchainVerification'
 
-export default function AuthenticationWizard() {
+export default function AuthenticationWizard({ onBackToSelection }) {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -102,11 +102,11 @@ export default function AuthenticationWizard() {
   return (
     <div className="relative">
       
-      {/* Back button (Only for steps 2 to 4, and not when justEnrolled redirects are locked) */}
-      {step > 1 && step < 5 && !justEnrolledData && (
+      {/* Back button */}
+      {((step > 1 && step < 5) || (step === 1 && onBackToSelection)) && !justEnrolledData && (
         <button
-          onClick={handleBack}
-          className="absolute -top-12 left-0 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          onClick={step === 1 ? onBackToSelection : handleBack}
+          className="absolute -top-12 left-0 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-705 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back</span>

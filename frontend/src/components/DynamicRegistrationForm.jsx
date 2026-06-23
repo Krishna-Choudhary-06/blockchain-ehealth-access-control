@@ -532,71 +532,7 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
             </>
           )}
 
-          {/* Admin Specific Fields */}
-          {role === 'Admin' && (
-            <>
-              {/* Admin ID */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Admin ID
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
-                    <Key className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    {...register('adminId', { 
-                      required: 'Admin ID is required',
-                      pattern: {
-                        value: /^ADM-\d{5}$/,
-                        message: 'Format must be ADM-XXXXX (e.g., ADM-00912)'
-                      }
-                    })}
-                    placeholder="e.g. ADM-00912"
-                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
-                  />
-                </div>
-                <ValidationMessage error={errors.adminId} />
-              </div>
 
-              {/* Organization */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Organization
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
-                    <Building className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    {...register('organization', { required: 'Organization is required' })}
-                    placeholder="e.g. NIT JAMSHEDPUR"
-                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
-                  />
-                </div>
-                <ValidationMessage error={errors.organization} />
-              </div>
-
-              {/* Security Level */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Security Clearance Level
-                </label>
-                <select
-                  {...register('securityLevel', { required: 'Security Clearance Level is required' })}
-                  className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm cursor-pointer"
-                >
-                  <option value="">Select Security Level</option>
-                  {['1', '2', '3', '4', '5'].map(lvl => (
-                    <option key={lvl} value={lvl}>Level {lvl}</option>
-                  ))}
-                </select>
-                <ValidationMessage error={errors.securityLevel} />
-              </div>
-            </>
-          )}
         </div>
       </div>
     )
