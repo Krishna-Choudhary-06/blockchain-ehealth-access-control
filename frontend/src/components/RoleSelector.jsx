@@ -42,19 +42,8 @@ const roles = [
     borderColor: 'group-hover:border-yellow-500/50 selected:border-yellow-500',
     glowColor: 'rgba(245, 158, 11, 0.15)',
     accentColor: 'text-yellow-500 bg-yellow-500/10'
-  },
-  {
-    id: 'Admin',
-    title: 'Admin',
-    description: 'Manage users, audit access policy violations, and maintain smart contract configuration.',
-    icon: Shield,
-    color: 'from-violet-500/20 to-indigo-500/20',
-    borderColor: 'group-hover:border-violet-500/50 selected:border-violet-500',
-    glowColor: 'rgba(139, 92, 246, 0.15)',
-    accentColor: 'text-violet-500 bg-violet-500/10'
   }
 ]
-
 export default function RoleSelector({ selectedRole, onChange }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
