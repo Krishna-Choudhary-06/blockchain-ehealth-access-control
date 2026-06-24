@@ -150,8 +150,11 @@ export default function EnrollmentWizard() {
 
       await new Promise(resolve => setTimeout(resolve, getDelay(1000)))
       
-      const identityId = 'UID-' + Math.floor(100000 + Math.random() * 900000)
-      
+      const identityId =
+  formData.name
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '')      
       // CALL BACKEND API TO REGISTER USER
       setEnrollmentProgress('Registering identity on Hyperledger Fabric backend...')
       toast.loading('Registering identity on Hyperledger Fabric backend...', { id: toastId })

@@ -20,8 +20,15 @@ app.post('/api/register', async (req, res) => {
         const result = await fabricService.registerUser(userId, publicKey, role);
         res.json({ success: true, data: result });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
+    console.error("REGISTER ERROR:");
+    console.error(err);
+
+    res.status(500).json({
+        success: false,
+        error: err.message,
+        stack: err.stack
+    });
+}
 });
 
 // 2. Assign privacy level
@@ -50,9 +57,16 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
         const result = await fabricService.storeHash(dataId, patientId, ipfsHash, iv, level);
 
         res.json({ success: true, data: result, encryptionKey: key });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
+    }  catch (err) {
+    console.error("UPLOAD ERROR:");
+    console.error(err);
+
+    res.status(500).json({
+        success: false,
+        error: err.message,
+        stack: err.stack
+    });
+}
 });
 
 // 4. Request access to file

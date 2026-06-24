@@ -9,9 +9,12 @@ import {
 } from 'react-icons/fi'
 import { decryptFile, decryptKeyForUser } from '../services/cryptoService'
 import { downloadFile } from '../services/ipfsService'
+import { getLogs } from '../services/apiService'
+
 
 
 export default function Dashboard() {
+  console.log("DASHBOARD COMPONENT RENDERED")
   const { user } = useAuth()
   const role = user?.role || 'Patient'
   const location = useLocation()
@@ -24,19 +27,13 @@ export default function Dashboard() {
   const [networkUsers, setNetworkUsers] = useState(156)
 
   // Access Logs Table mock state data
-  const [accessLogs, setAccessLogs] = useState([
-    { id: 1, user: 'Dr. Sarah Miller', role: 'Doctor', action: 'Read File PAT-8820', status: 'Granted', timestamp: '2026-06-10 13:42:01' },
-    { id: 2, user: 'Nurse Kelly Smith', role: 'Nurse', action: 'Read File PAT-8820', status: 'Denied', timestamp: '2026-06-10 13:40:15' },
-    { id: 3, user: 'Patient Alex Carter', role: 'Patient', action: 'Read File PAT-1092', status: 'Granted', timestamp: '2026-06-10 13:12:44' },
-    { id: 4, user: 'Dr. James Watson', role: 'Doctor', action: 'Write File PAT-3491', status: 'Granted', timestamp: '2026-06-10 12:44:59' },
-    { id: 5, user: 'Unknown Peer', role: 'Doctor', action: 'Read File PAT-8820', status: 'Denied', timestamp: '2026-06-10 12:01:10' }
-  ])
+  const [accessLogs, setAccessLogs] = useState([])
   // Simulated Patient Records (implementing Section 5)
   const [patientRecords, setPatientRecords] = useState(() => {
     const saved = localStorage.getItem('patient_records')
     const uploaded = saved ? JSON.parse(saved) : []
     const defaults = [
-      { id: 'PAT-8820', name: 'PAT-8820: Cardiology Report', sensitivity: 'L0', ipfsHash: 'QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco', uploadTime: '2026-06-10 13:42:01' },
+      { id: 'PAT-8820', name: 'PAT-8820: Cardiology Report', sensitivity: 'L0', ipfsHash:   'QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco', uploadTime: '2026-06-10 13:42:01' },
       { id: 'PAT-3491', name: 'PAT-3491: Blood Panel Analysis', sensitivity: 'L1', ipfsHash: 'QmYwAPJzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWp8xyz', uploadTime: '2026-06-10 12:44:59' },
       { id: 'PAT-1092', name: 'PAT-1092: MRI Brain Scan', sensitivity: 'L2', ipfsHash: 'QmZpQRzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWq9abc', uploadTime: '2026-06-10 13:12:44' },
       { id: 'PAT-5420', name: 'PAT-5420: General Health Screening', sensitivity: 'L3', ipfsHash: 'QmT123zvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWr0def', uploadTime: '2026-06-09 10:15:30' }
@@ -145,7 +142,26 @@ export default function Dashboard() {
   }
 
   const activeStats = statCards[role] || statCards.Patient
+  useEffect(() => {
+  const loadLogs = async () => {
+    try {
+      const response = await getLogs()
+      console.log("LOG RESPONSE", response)
+      if (response.success) {
+        setAccessLogs(
+  response.data.sort(
+    (a, b) => new Date(b.time) - new Date(a.time)
+  )
+)
+      }
+      console.log("BLOCKCHAIN LOGS:", response.data)
+    } catch (err) {
+      console.error('Failed to load logs', err)
+    }
+  }
 
+  loadLogs()
+}, [])
   // Set up refresh simulation loop
   useEffect(() => {
     const interval = setInterval(() => {
@@ -182,7 +198,7 @@ export default function Dashboard() {
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19)
       }
 
-      setAccessLogs(prev => [newLog, ...prev].slice(0, 6))
+      // setAccessLogs(prev => [newLog, ...prev].slice(0, 6))
       setBlocksMined(prev => prev + 1)
       if (status === 'Granted' && chosenRole === 'Doctor') {
         setSuccessReads(prev => prev + 1)
@@ -299,33 +315,44 @@ export default function Dashboard() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
-                <th className="pb-3.5 pl-2">User</th>
-                <th className="pb-3.5">System Role</th>
-                <th className="pb-3.5">Action Request</th>
-                <th className="pb-3.5">Status</th>
-                <th className="pb-3.5 text-right pr-2">Timestamp</th>
+                <th className="pb-3.5 pl-2">Requester</th>
+<th className="pb-3.5">Data ID</th>
+<th className="pb-3.5">Action</th>
+<th className="pb-3.5">Requester Level</th>
+<th className="pb-3.5">Data Level</th>
+<th className="pb-3.5 text-right pr-2">Time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-355 text-xs">
               {accessLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-955/20 transition-colors">
-                  <td className="py-4 pl-2 font-semibold text-slate-900 dark:text-white">{log.user}</td>
-                  <td className="py-4 font-mono text-[10px] uppercase">{log.role}</td>
-                  <td className="py-4">{log.action}</td>
-                  <td className="py-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${
-                      log.status === 'Granted'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 border-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                        log.status === 'Granted' ? 'bg-emerald-500' : 'bg-rose-500'
-                      }`}></span>
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-500 dark:text-slate-400">{log.timestamp}</td>
-                </tr>
+                <tr
+  key={`${log.requesterId}-${log.dataId}-${log.time}`}
+  className="hover:bg-slate-50/50 dark:hover:bg-slate-955/20 transition-colors"
+>
+  <td className="py-4 pl-2 font-semibold text-slate-900 dark:text-white">
+    {log.requesterId}
+  </td>
+
+  <td className="py-4 font-mono">
+    {log.dataId}
+  </td>
+
+  <td className="py-4">
+    {log.action}
+  </td>
+
+  <td className="py-4">
+    {log.requesterLevel}
+  </td>
+
+  <td className="py-4">
+    {log.dataLevel}
+  </td>
+
+  <td className="py-4 text-right pr-2 font-mono text-[10px]">
+    {log.time}
+  </td>
+</tr>
               ))}
             </tbody>
           </table>
@@ -800,32 +827,45 @@ export default function Dashboard() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
-                <th className="pb-3.5 pl-2">User identity</th>
-                <th className="pb-3.5">Role</th>
-                <th className="pb-3.5">Action Executed</th>
-                <th className="pb-3.5">Status Check</th>
-                <th className="pb-3.5 text-right pr-2">Date & Time</th>
+                <th className="pb-3.5 pl-2">Requester</th>
+<th className="pb-3.5">Data ID</th>
+<th className="pb-3.5">Action</th>
+<th className="pb-3.5">Level</th>
+<th className="pb-3.5 text-right pr-2">Time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-355 text-xs font-sans">
-              {accessLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
-                  <td className="py-4 pl-2 font-semibold text-slate-900 dark:text-white">{log.user}</td>
-                  <td className="py-4 font-mono text-[10px] uppercase text-slate-500 dark:text-slate-405">{log.role}</td>
-                  <td className="py-4">{log.action}</td>
-                  <td className="py-4">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                      log.status === 'Granted'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-455 border-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
-                    }`}>
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550 dark:text-slate-400">{log.timestamp}</td>
-                </tr>
-              ))}
-            </tbody>
+  {accessLogs.map((log) => (
+    <tr
+      key={`${log.requesterId}-${log.dataId}-${log.time}`}
+      className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors"
+    >
+      <td className="py-4 pl-2 font-semibold text-slate-900 dark:text-white">
+        {log.requesterId}
+      </td>
+
+      <td className="py-4 font-mono">
+        {log.dataId}
+      </td>
+
+      <td className="py-4">
+        {log.action}
+      </td>
+
+      <td className="py-4">
+        {log.requesterLevel}
+      </td>
+
+      <td className="py-4">
+        {log.dataLevel}
+      </td>
+
+      <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550 dark:text-slate-400">
+        {log.time}
+      </td>
+    </tr>
+  ))}
+</tbody>
           </table>
         </div>
       </div>

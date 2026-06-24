@@ -47,26 +47,26 @@ async function main() {
         const provider = wallet.getProviderRegistry()
             .getProvider(adminIdentity.type);
         const adminUser = await provider.getUserContext(adminIdentity, 'admin');
-
         const secret = await ca.register({
-            affiliation: 'org1.department1',
-            enrollmentID: 'appUser',
-            role: 'client'
-        }, adminUser);
-
+    affiliation: 'org1.department1',
+    enrollmentID: 'appUser3',
+    role: 'client'
+}, adminUser);
         const enrollment = await ca.enroll({
-            enrollmentID: 'appUser', enrollmentSecret: secret
-        });
+    enrollmentID: 'appUser3',
+    enrollmentSecret: secret
+});
         const x509Identity = {
             credentials: {
                 certificate: enrollment.certificate,
                 privateKey: enrollment.key.toBytes()
+
             },
             mspId: 'Org1MSP',
             type: 'X.509'
         };
-        await wallet.put('appUser', x509Identity);
-        console.log('✅ appUser enrolled');
+        await wallet.put('appUser3', x509Identity);
+console.log('✅ appUser3 enrolled');
     }
 }
 

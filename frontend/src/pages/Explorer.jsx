@@ -3,7 +3,7 @@ import {
   FiActivity, FiCpu, FiHardDrive, FiHash, 
   FiClock, FiTrendingUp, FiCheckCircle, FiAlertTriangle 
 } from 'react-icons/fi'
-
+import { getLogs } from '../services/apiService'
 // Helper names and files for live-updating data simulation
 const doctors = ['Dr. Sarah Miller', 'Dr. James Watson', 'Dr. Helen Cho', 'Dr. Robert Carter', 'Dr. Emily Vance']
 const patients = ['Alice Johnson', 'Bob Smith', 'Charlie Green', 'David Wright', 'Eva Adams']
@@ -41,6 +41,33 @@ export default function Explorer() {
   ])
 
 
+  useEffect(() => {
+  const loadLogs = async () => {
+    try {
+      const response = await getLogs()
+
+      if (response.success) {
+        const blockchainTxs = response.data
+  .sort((a, b) => new Date(b.time) - new Date(a.time))
+  .map((log, index) => ({
+    id: log.txId || `${log.requesterId}-${log.dataId}-${index}`,
+    block: 'Ledger',
+    sender: log.requesterId,
+    requesterLevel: log.requesterLevel,
+    dataLevel: log.dataLevel,
+    action: `Access ${log.dataId}`,
+    status: log.action === 'GRANTED' ? 'Granted' : 'Denied',
+    time: new Date(log.time).toLocaleTimeString()
+  }))
+
+        setTxs(blockchainTxs)
+      }
+    } catch (err) {
+      console.error('Failed to load blockchain logs', err)
+    }
+  }
+  loadLogs()
+}, [])
 
   useEffect(() => {
     // Refresh interval: run every 3 seconds
@@ -121,10 +148,10 @@ export default function Explorer() {
         return list.slice(0, 5)
       })
 
-      setTxs(prev => {
-        const list = [...newTransactions, ...prev]
-        return list.slice(0, 6)
-      })
+      // setTxs(prev => {
+      //   const list = [...newTransactions, ...prev]
+      //   return list.slice(0, 6)
+      // })
 
       // Update timeline activity feed
       const newFeedItem = {
@@ -231,6 +258,7 @@ export default function Explorer() {
               </div>
 
               <div className="overflow-x-auto">
+                
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
@@ -275,14 +303,17 @@ export default function Explorer() {
               </div>
 
               <div className="overflow-x-auto">
+  
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
                       <th className="pb-3 pl-2">Transaction Hash</th>
                       <th className="pb-3">Block Number</th>
                       <th className="pb-3">User</th>
-                      <th className="pb-3">Action</th>
-                      <th className="pb-3">Status</th>
+<th className="pb-3">Req Level</th>
+<th className="pb-3">Data Level</th>
+<th className="pb-3">Action</th>
+<th className="pb-3">Status</th>
                       <th className="pb-3 text-right pr-2">Timestamp</th>
                     </tr>
                   </thead>
@@ -296,11 +327,20 @@ export default function Explorer() {
                           Block {tx.block}
                         </td>
                         <td className="py-3.5 font-semibold text-slate-800 dark:text-slate-200">
-                          {tx.sender}
-                        </td>
-                        <td className="py-3.5 text-slate-600 dark:text-slate-350">
-                          {tx.action}
-                        </td>
+  {tx.sender}
+</td>
+
+<td className="py-3.5 font-mono">
+  {tx.requesterLevel}
+</td>
+
+<td className="py-3.5 font-mono">
+  {tx.dataLevel}
+</td>
+
+<td className="py-3.5 text-slate-600 dark:text-slate-350">
+  {tx.action}
+</td>
                         <td className="py-3.5">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
                             tx.status === 'Granted'

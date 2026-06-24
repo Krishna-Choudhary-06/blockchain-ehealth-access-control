@@ -1,18 +1,20 @@
-const {
-    uploadFile,
-    downloadFile
-} = require("./services/ipfsService");
+(async () => {
+  try {
+    const { create } = await import('ipfs-http-client');
 
-async function main() {
-    const cid = await uploadFile(
-        Buffer.from("Hello Kritika")
-    );
+    const ipfs = create({
+      host: '127.0.0.1',
+      port: 5001,
+      protocol: 'http'
+    });
 
-    console.log("CID:", cid);
+    const result = await ipfs.add('hello world');
 
-    const data = await downloadFile(cid);
+    console.log('SUCCESS');
+    console.log(result.cid.toString());
 
-    console.log("Downloaded:", data.toString());
-}
-
-main();
+  } catch (err) {
+    console.error('FAILED');
+    console.error(err);
+  }
+})();

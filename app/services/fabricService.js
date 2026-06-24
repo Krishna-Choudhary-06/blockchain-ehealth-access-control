@@ -20,12 +20,15 @@ async function getContract() {
     const gateway = new Gateway();
     await gateway.connect(ccp, {
         wallet,
-        identity: 'appUser',
-        discovery: { enabled: true, asLocalhost: true }
-    });
+        identity: 'appUser3',
+        discovery: {
+  enabled: true,
+  asLocalhost: true
+}
+      });
 
-    const network = await gateway.getNetwork('healthchannel');
-    const contract = network.getContract('healthcontract');
+    const network = await gateway.getNetwork('mychannel');
+    const contract = network.getContract('ehr-registration-v3');
 
     return { contract, gateway };
 }
@@ -33,9 +36,22 @@ async function getContract() {
 async function registerUser(userId, publicKey, role) {
     const { contract, gateway } = await getContract();
     try {
-        const result = await contract.submitTransaction(
-            'UserRegistry:registerUser', userId, publicKey, role
-        );
+        try {
+    const result = await contract.submitTransaction(
+        'registerUser',
+        userId,
+        publicKey,
+        role
+    );
+
+    return JSON.parse(result.toString());
+} catch (err) {
+    console.error("FULL FABRIC ERROR:");
+    console.error(JSON.stringify(err, null, 2));
+    console.error(err);
+
+    throw err;
+}
         return JSON.parse(result.toString());
     } finally {
         gateway.disconnect();

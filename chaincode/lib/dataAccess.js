@@ -54,16 +54,18 @@ class DataAccess extends Contract {
         }
         const data = JSON.parse(dataBytes.toString());
 
-        const granted = acl.levelNum <= data.requiredLevelNum;
+        const granted = acl.levelNum >= data.requiredLevelNum;
+        const txId = ctx.stub.getTxID();
 
-        const log = {
-            requesterId,
-            dataId,
-            action: granted ? 'GRANTED' : 'DENIED',
-            requesterLevel: acl.level,
-            dataLevel: data.requiredLevel,
-            time: this._getTimestamp(ctx)
-        };
+const log = {
+    txId,
+    requesterId,
+    dataId,
+    action: granted ? 'GRANTED' : 'DENIED',
+    requesterLevel: acl.level,
+    dataLevel: data.requiredLevel,
+    time: this._getTimestamp(ctx)
+};
 
         await ctx.stub.putState(
             'LOG_' + ctx.stub.getTxID(),
