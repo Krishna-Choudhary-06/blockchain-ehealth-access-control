@@ -98,8 +98,8 @@ export default function EnrollmentWizard() {
         fieldsToValidate = ['regNo', 'department', 'shiftType', 'organization', 'experience']
       } else if (formData.role === 'Patient') {
         fieldsToValidate = ['patientId', 'emergencyContact', 'insuranceNo']
-      } else if (formData.role === 'Accountant') {
-        fieldsToValidate = ['employeeId', 'department', 'organization']
+      } else if (formData.role === 'Staff') {
+        fieldsToValidate = ['staffId', 'department', 'organization']
       }
 
       const isStep3Valid = await trigger(fieldsToValidate)
@@ -223,6 +223,7 @@ export default function EnrollmentWizard() {
       setLoading(false)
       toast.success('Identity node enrolled and committed to ledger!', { id: toastId })
     } catch (error) {
+      console.error("handleEnrollIdentity ERROR IN TEST:", error)
       toast.error(`Registration failed: ${error.message}`, { id: toastId })
       setLoading(false)
     }
@@ -354,10 +355,10 @@ export default function EnrollmentWizard() {
                         <div><span className="text-slate-400">Insurance ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.insuranceNo}</span></div>
                       </>
                     )}
-                    {formData.role === 'Accountant' && (
+                    {formData.role === 'Staff' && (
                       <>
-                        <div><span className="text-slate-400">Employee ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.employeeId}</span></div>
-                        <div><span className="text-slate-400">Finance Dept:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
+                        <div><span className="text-slate-400">Staff ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.staffId}</span></div>
+                        <div><span className="text-slate-400">Department:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
                         <div><span className="text-slate-400">Organization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
                       </>
                     )}

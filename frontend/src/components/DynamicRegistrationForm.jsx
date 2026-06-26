@@ -464,13 +464,13 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
             </>
           )}
 
-          {/* Accountant Specific Fields */}
-          {role === 'Accountant' && (
+          {/* Staff Specific Fields */}
+          {role === 'Staff' && (
             <>
-              {/* Employee ID */}
+              {/* Staff ID */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Employee ID
+                  Staff ID
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
@@ -478,24 +478,24 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                   </div>
                   <input
                     type="text"
-                    {...register('employeeId', { 
-                      required: 'Employee ID is required',
+                    {...register('staffId', { 
+                      required: 'Staff ID is required',
                       pattern: {
-                        value: /^EMP-\d{5}$/,
-                        message: 'Format must be EMP-XXXXX (e.g., EMP-10495)'
+                        value: /^STF-\d{6}$/,
+                        message: 'Format must be STF-XXXXXX (e.g., STF-104952)'
                       }
                     })}
-                    placeholder="e.g. EMP-10495"
+                    placeholder="e.g. STF-104952"
                     className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
                   />
                 </div>
-                <ValidationMessage error={errors.employeeId} />
+                <ValidationMessage error={errors.staffId} />
               </div>
 
-              {/* Finance Department */}
+              {/* Department */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Finance Department
+                  Department
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
@@ -503,8 +503,8 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                   </div>
                   <input
                     type="text"
-                    {...register('department', { required: 'Finance department name is required' })}
-                    placeholder="e.g. Accounts & Claims"
+                    {...register('department', { required: 'Department is required' })}
+                    placeholder="e.g. Clinical Operations"
                     className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
                   />
                 </div>
@@ -523,7 +523,7 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                   <input
                     type="text"
                     {...register('organization', { required: 'Organization is required' })}
-                    placeholder="e.g. City Health Insurance Co."
+                    placeholder="e.g. Metro General Hospital"
                     className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
                   />
                 </div>

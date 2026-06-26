@@ -20,8 +20,9 @@ export default function AccessRequests() {
     purpose: '',
     duration: '24 Hours'
   })
+  const [patients, setPatients] = useState([])
 
-  // Load access requests on mount
+  // Load access requests & registered patients on mount
   useEffect(() => {
     const saved = localStorage.getItem('access_requests')
     if (saved) {
@@ -74,6 +75,27 @@ export default function AccessRequests() {
       localStorage.setItem('access_requests', JSON.stringify(defaultRequests))
       setAccessRequests(defaultRequests)
     }
+
+    // Load registered patients
+    const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+    const patientUsers = users.filter(u => u.role === 'Patient')
+    const defaultPatients = [
+      { userId: 'PAT-8820', name: 'Patient Alex Carter', defaultRecord: 'Cardiology Report' },
+      { userId: 'PAT-3491', name: 'Patient Alice Johnson', defaultRecord: 'Blood Panel Analysis' },
+      { userId: 'PAT-1092', name: 'Patient Bob Smith', defaultRecord: 'MRI Brain Scan' },
+      { userId: 'PAT-5420', name: 'Patient Alex Carter', defaultRecord: 'General Health Screening' }
+    ]
+    const combined = [...defaultPatients]
+    patientUsers.forEach(pu => {
+      if (!combined.some(c => c.userId === pu.userId)) {
+        combined.push({
+          userId: pu.userId,
+          name: pu.name,
+          defaultRecord: 'General Health Screening'
+        })
+      }
+    })
+    setPatients(combined)
   }, [])
 
   const saveAccessRequests = (updatedRequests) => {
@@ -99,11 +121,13 @@ export default function AccessRequests() {
         Math.floor(Math.random() * 16).toString(16)
       ).join('')
 
+      const selectedPatient = patients.find(p => p.userId === requestFormData.patientId)
+      const patientName = selectedPatient ? selectedPatient.name : 'Unknown Patient'
+
       const newRequest = {
         id: newRequestId,
         patientId: requestFormData.patientId,
-        patientName: requestFormData.patientId === 'PAT-8820' ? 'Patient Alex Carter' : 
-                     requestFormData.patientId === 'PAT-3491' ? 'Patient Alice Johnson' : 'Patient Bob Smith',
+        patientName: patientName,
         recordType: requestFormData.recordType,
         purpose: requestFormData.purpose,
         duration: requestFormData.duration,
@@ -233,6 +257,78 @@ export default function AccessRequests() {
         )}
       </div>
 
+      {/* Sharing Workflow Visualization (Phase 11) */}
+      <div className="w-full overflow-hidden p-6 rounded-3xl bg-slate-950 border border-slate-850 shadow-md relative">
+        <div className="absolute inset-0 bg-gradient-to-tr from-purple-500/5 via-indigo-500/5 to-transparent rounded-3xl pointer-events-none" />
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-6 flex items-center gap-2 relative z-10">
+          <FiActivity className="text-purple-500 w-4 h-4 animate-pulse" /> Cryptographic Consent Lifecycle Workflow
+        </h3>
+        
+        <div className="relative z-10 max-w-4xl mx-auto py-2">
+          {/* SVG Canvas for Flow Connections */}
+          <svg className="w-full hidden md:block absolute top-8 left-0 h-10 overflow-visible pointer-events-none z-0">
+            <defs>
+              <linearGradient id="flowGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#a855f7" />
+                <stop offset="50%" stopColor="#6366f1" />
+                <stop offset="100%" stopColor="#10b981" />
+              </linearGradient>
+            </defs>
+            <path d="M 60,10 H 650" fill="none" stroke="url(#flowGrad)" strokeWidth="2.5" strokeDasharray="6 6" />
+          </svg>
+          
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 relative z-10">
+            {/* Step 1 */}
+            <div className="flex flex-col items-center text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-400 flex items-center justify-center shadow-lg relative transition-all duration-300">
+                <FiPlus className="w-6 h-6" />
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-purple-600 border-2 border-slate-950 text-[10px] font-bold text-white flex items-center justify-center">1</span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-200 block">Doctor Request</span>
+                <span className="text-[10px] text-slate-500 block max-w-[160px] leading-normal">Doctor submits record request query to ledger</span>
+              </div>
+            </div>
+            
+            {/* Step 2 */}
+            <div className="flex flex-col items-center text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shadow-lg relative transition-all duration-300">
+                <FiUserCheck className="w-6 h-6" />
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-indigo-600 border-2 border-slate-950 text-[10px] font-bold text-white flex items-center justify-center">2</span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-200 block">Patient Consent</span>
+                <span className="text-[10px] text-slate-500 block max-w-[160px] leading-normal">Patient signs and approves request with private key</span>
+              </div>
+            </div>
+            
+            {/* Step 3 */}
+            <div className="flex flex-col items-center text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center justify-center shadow-lg relative transition-all duration-300">
+                <FiCpu className="w-6 h-6" />
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-blue-600 border-2 border-slate-950 text-[10px] font-bold text-white flex items-center justify-center">3</span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-200 block">ABAC Validation</span>
+                <span className="text-[10px] text-slate-500 block max-w-[160px] leading-normal">Fabric validation peers evaluate attribute criteria</span>
+              </div>
+            </div>
+            
+            {/* Step 4 */}
+            <div className="flex flex-col items-center text-center space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shadow-lg relative transition-all duration-300">
+                <FiFileText className="w-6 h-6" />
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 border-2 border-slate-950 text-[10px] font-bold text-white flex items-center justify-center">4</span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs font-bold text-slate-200 block">Record Decryption</span>
+                <span className="text-[10px] text-slate-500 block max-w-[160px] leading-normal">Doctor decrypts files using consensus-granted key</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-6">
         <div className="border-b border-slate-100 dark:border-slate-800/80 pb-4">
           <h3 className="text-sm font-bold text-slate-855 dark:text-slate-300 uppercase tracking-wider">
@@ -352,19 +448,21 @@ export default function AccessRequests() {
                 </label>
                 <select
                   value={requestFormData.patientId}
-                  onChange={(e) => setRequestFormData(prev => ({ 
-                    ...prev, 
-                    patientId: e.target.value,
-                    recordType: e.target.value === 'PAT-8820' ? 'Cardiology Report' :
-                                e.target.value === 'PAT-3491' ? 'Blood Panel Analysis' :
-                                e.target.value === 'PAT-1092' ? 'MRI Brain Scan' : 'General Health Screening'
-                  }))}
-                  className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-205 dark:border-slate-850 rounded-xl px-3.5 py-3 text-slate-900 dark:text-white focus:ring-1 focus:ring-purple-500 focus:outline-none cursor-pointer"
+                  onChange={(e) => {
+                    const selectedPat = patients.find(p => p.userId === e.target.value)
+                    setRequestFormData(prev => ({ 
+                      ...prev, 
+                      patientId: e.target.value,
+                      recordType: selectedPat ? selectedPat.defaultRecord || 'General Health Screening' : 'General Health Screening'
+                    }))
+                  }}
+                  className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-205 dark:border-slate-850 rounded-xl px-3.5 py-3 text-slate-900 dark:text-white focus:ring-1 focus:ring-purple-500 focus:outline-none cursor-pointer text-xs font-semibold"
                 >
-                  <option value="PAT-8820">PAT-8820: Cardiology Report</option>
-                  <option value="PAT-3491">PAT-3491: Blood Panel Analysis</option>
-                  <option value="PAT-1092">PAT-1092: MRI Brain Scan</option>
-                  <option value="PAT-5420">PAT-5420: General Health Screening</option>
+                  {patients.map(p => (
+                    <option key={p.userId} value={p.userId}>
+                      {p.userId}: {p.name} ({p.defaultRecord || 'General Health Screening'})
+                    </option>
+                  ))}
                 </select>
               </div>
 

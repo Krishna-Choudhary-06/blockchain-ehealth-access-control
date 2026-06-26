@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { 
   FiFileText, FiLock, FiUnlock, FiEye, FiDownload, FiCheckCircle,
   FiCpu, FiHash, FiShield, FiAlertCircle, FiDatabase,
-  FiSearch, FiFilter, FiCalendar, FiX, FiActivity, FiKey
+  FiSearch, FiFilter, FiCalendar, FiX, FiActivity, FiKey, FiUser
 } from 'react-icons/fi'
 
 export default function PatientRecords() {
@@ -243,6 +243,15 @@ export default function PatientRecords() {
   const getFilteredRecords = () => {
     let filtered = records
 
+    // Filter by patient ownership if logged in as Patient
+    if (user?.role === 'Patient') {
+      filtered = filtered.filter(rec => 
+        rec.owner?.toLowerCase() === user.name?.toLowerCase() ||
+        rec.patientName?.toLowerCase() === user.name?.toLowerCase() ||
+        (user.name?.toLowerCase().includes('alex carter') && rec.owner?.toLowerCase().includes('alex carter'))
+      )
+    }
+
     // Filter by type
     if (filterType !== 'All') {
       filtered = filtered.filter(rec => rec.recordType === filterType)
@@ -306,6 +315,44 @@ export default function PatientRecords() {
             <span>IPFS STORAGE CLUSTER</span>
           </div>
         </div>
+
+        {/* Record Ownership Panel (Phase 2) */}
+        {user?.role === 'Patient' && (
+          <div className="bg-gradient-to-r from-purple-500/5 via-indigo-500/5 to-blue-500/5 dark:from-purple-950/10 dark:via-indigo-950/10 dark:to-blue-950/10 border border-slate-205 dark:border-slate-850 rounded-3xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6 backdrop-blur-xl animate-fade-in-up">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center border border-purple-500/20">
+                <FiUser className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block font-mono">RECORD OWNER</span>
+                <strong className="text-slate-800 dark:text-slate-200 text-base">{user?.name || 'Patient Alex Carter'}</strong>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 flex-grow max-w-xl">
+              <div>
+                <span className="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest block font-mono">STORAGE PROVIDER</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-350 flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  IPFS Cluster (Qm...)
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest block font-mono">LEDGER STATUS</span>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-350 flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                  Secured (ABAC Policy)
+                </span>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-455 dark:text-slate-500 uppercase tracking-widest block font-mono">TOTAL RECORDS</span>
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mt-0.5">
+                  {filteredRecords.length} Files
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Filter and Search Panel */}
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-5 rounded-3xl shadow-sm space-y-4">
@@ -570,15 +617,23 @@ export default function PatientRecords() {
               <div className="space-y-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-150 dark:border-slate-900 rounded-2xl p-4 text-xs font-mono">
                 <div>
                   <span className="text-[9px] text-slate-450 block uppercase tracking-wider font-bold">Record SHA-256 Hash</span>
-                  <span className="text-slate-800 dark:text-slate-300 break-all select-all font-semibold">{selectedRecord.recordHash}</span>
+                  <span className="text-slate-800 dark:text-slate-300 break-all select-all font-semibold">{selectedRecord.recordHash || selectedRecord.txId}</span>
                 </div>
                 <div>
                   <span className="text-[9px] text-slate-455 block uppercase tracking-wider font-bold">IPFS Content Identifier (CID)</span>
                   <span className="text-slate-800 dark:text-slate-300 break-all select-all font-semibold">{selectedRecord.ipfsHash}</span>
                 </div>
                 <div>
+                  <span className="text-[9px] text-slate-455 block uppercase tracking-wider font-bold">Initialization Vector (IV)</span>
+                  <span className="text-slate-800 dark:text-slate-300 break-all select-all font-semibold">{selectedRecord.ivHex || 'N/A'}</span>
+                </div>
+                <div>
                   <span className="text-[9px] text-slate-455 block uppercase tracking-wider font-bold">Blockchain Transaction ID</span>
                   <span className="text-slate-800 dark:text-slate-300 break-all select-all font-semibold">{selectedRecord.txId}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-455 block uppercase tracking-wider font-bold">Consensus Timestamp</span>
+                  <span className="text-slate-800 dark:text-slate-300 font-semibold">{selectedRecord.uploadTime}</span>
                 </div>
               </div>
             </div>

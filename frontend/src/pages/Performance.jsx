@@ -75,7 +75,7 @@ export default function Performance() {
 
   // Auto-scroll terminal logs
   useEffect(() => {
-    if (terminalEndRef.current) {
+    if (terminalEndRef.current && typeof terminalEndRef.current.scrollIntoView === 'function') {
       terminalEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
   }, [terminalLogs])

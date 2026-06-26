@@ -21,6 +21,7 @@ export default function Sidebar() {
     ],
     Doctor: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Upload Diagnosis', path: '/upload', icon: FiUpload },
       { name: 'Patient Files', path: '#records', icon: FiFileText },
       { name: 'Access Logs', path: '#logs', icon: FiClock },
       { name: 'Profile', path: '#profile', icon: FiUser },
@@ -30,6 +31,12 @@ export default function Sidebar() {
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
       { name: 'Lab Reports', path: '#lab-reports', icon: FiFileText },
       { name: 'Access History', path: '#access-history', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
+      { name: 'Explorer', path: '/explorer', icon: FiActivity }
+    ],
+    Staff: [
+      { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Access Logs', path: '#access-logs', icon: FiClock },
       { name: 'Profile', path: '#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],

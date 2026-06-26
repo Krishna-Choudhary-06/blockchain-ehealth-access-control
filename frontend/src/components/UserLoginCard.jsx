@@ -30,7 +30,7 @@ export default function UserLoginCard({ onClick }) {
             Sign In as User
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            Authorized healthcare professionals (Doctors, Nurses, Accountants) and Patients. Access records, manage consents, and review access histories.
+            Authorized healthcare professionals (Doctors, Nurses, Staff) and Patients. Access records, manage consents, and review access histories.
           </p>
         </div>
       </div>
