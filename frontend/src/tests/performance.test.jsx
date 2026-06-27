@@ -25,7 +25,7 @@ describe('Performance Component', () => {
     render(<Performance />)
     
     expect(screen.getByText(/Performance Experiments/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Run/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Execute Benchmark/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Reset/i })).toBeInTheDocument()
     
     // Check chart titles
@@ -38,11 +38,11 @@ describe('Performance Component', () => {
   test('triggers experiment running, advances progress, and completes simulation', () => {
     render(<Performance />)
     
-    const runBtn = screen.getByRole('button', { name: /Run/i })
+    const runBtn = screen.getByRole('button', { name: /Execute Benchmark/i })
     fireEvent.click(runBtn)
     
     // Should show setting up cluster message
-    expect(screen.getByText(/Setting up local Web3 benchmark/i)).toBeInTheDocument()
+    expect(screen.getByText(/Starting simulation initialization/i)).toBeInTheDocument()
     
     // Fast-forward timers
     act(() => {
@@ -50,7 +50,7 @@ describe('Performance Component', () => {
     })
     
     // Should show completed simulation message
-    expect(screen.getByText(/Experiment complete/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Completed simulation/i).length).toBeGreaterThan(0)
   })
 
   test('renders literature comparison grid', () => {

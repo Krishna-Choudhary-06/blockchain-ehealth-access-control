@@ -327,6 +327,8 @@ export async function initializeMockUsersKeys() {
  * Returns 1ms during tests to keep execution fast.
  */
 export function getDelay(ms) {
-  const isTest = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.VITEST);
+  const isTest = (typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.VITEST)) ||
+                 (typeof window !== 'undefined' && (window.vitest || window.vi || window.__vitest_worker__)) ||
+                 (typeof globalThis !== 'undefined' && (globalThis.vitest || globalThis.vi || globalThis.__vitest_worker__));
   return isTest ? 1 : ms;
 }

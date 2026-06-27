@@ -577,7 +577,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <Cpu className="w-4.5 h-4.5 text-purple-600" />
-                Active Peer Heartbeats
+                Active Peer Heartbeats (Peer Nodes Connected)
               </h3>
               <span className="text-[10px] font-mono text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">4 / 4 ON</span>
             </div>
@@ -616,7 +616,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <Users className="w-4.5 h-4.5 text-blue-500" />
-                Network CA Identities
+                Network CA Identities (Registered Network Users)
               </h3>
               <span className="text-[10px] font-mono text-blue-500 font-bold bg-blue-500/10 px-2 py-0.5 rounded-full">Active CA</span>
             </div>
@@ -656,7 +656,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <HardDrive className="w-4.5 h-4.5 text-emerald-500" />
-                Ledger Chain Height
+                Ledger Chain Height (Total Blocks Mined)
               </h3>
               <span className="text-[10px] font-mono text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">Operational</span>
             </div>

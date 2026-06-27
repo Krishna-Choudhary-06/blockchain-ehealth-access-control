@@ -53,6 +53,10 @@ describe('Login Component', () => {
     )
     
     expect(screen.getByText(/Access Blockchain Healthcare Network/i)).toBeInTheDocument()
+    
+    // Select User role to open AuthenticationWizard
+    fireEvent.click(screen.getByText(/Sign In as User/i))
+    
     expect(screen.getByRole('button', { name: /Authenticate Workspace Node/i })).toBeInTheDocument()
 
     // Navigate to step 2
@@ -90,6 +94,9 @@ describe('Login Component', () => {
         <Login />
       </MemoryRouter>
     )
+
+    // Select User role to open AuthenticationWizard
+    fireEvent.click(screen.getByText(/Sign In as User/i))
 
     // Step 1: Click Welcome proceed button
     fireEvent.click(screen.getByRole('button', { name: /Authenticate Workspace Node/i }))

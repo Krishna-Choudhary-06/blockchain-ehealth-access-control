@@ -34,10 +34,10 @@ const roles = [
     accentColor: 'text-blue-500 bg-blue-500/10'
   },
   {
-    id: 'Accountant',
-    title: 'Accountant',
-    description: 'Manage financial records, process insurance claims, and review billing statements.',
-    icon: Coins,
+    id: 'Staff',
+    title: 'Staff',
+    description: 'Manage administrative tasks, assist clinic operations, and view general records.',
+    icon: Shield,
     color: 'from-amber-500/20 to-yellow-500/20',
     borderColor: 'group-hover:border-yellow-500/50 selected:border-yellow-500',
     glowColor: 'rgba(245, 158, 11, 0.15)',
