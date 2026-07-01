@@ -90,29 +90,7 @@ export default function EnrollmentWizard() {
     }
 
     if (step === 3) {
-      // Validate Step 3 fields based on role
-      let fieldsToValidate = []
-      if (formData.role === 'Doctor') {
-        fieldsToValidate = ['regNo', 'specialization', 'department', 'organization', 'experience', 'licenseExpiry']
-      } else if (formData.role === 'Nurse') {
-        fieldsToValidate = ['regNo', 'department', 'shiftType', 'organization', 'experience']
-      } else if (formData.role === 'Patient') {
-        fieldsToValidate = ['patientId', 'emergencyContact', 'insuranceNo']
-      } else if (formData.role === 'Staff') {
-        fieldsToValidate = ['staffId', 'department', 'organization']
-      }
-
-      const isStep3Valid = await trigger(fieldsToValidate)
-      if (isStep3Valid) {
-        setStep(4)
-      } else {
-        toast.error('Please fix the errors in Professional Information.')
-      }
-      return
-    }
-
-    if (step === 4) {
-      setStep(5)
+      setStep(4)
       return
     }
   }
@@ -191,6 +169,8 @@ export default function EnrollmentWizard() {
         userId: identityId,
         name: formData.name,
         role: formData.role,
+        email: formData.email,
+        phone: formData.phone,
         organization: finalOrg,
         publicKey: keyPair.publicKey,
         privateKey: keyPair.privateKey
@@ -275,9 +255,9 @@ export default function EnrollmentWizard() {
               </motion.div>
             )}
 
-            {(step === 2 || step === 3) && (
+            {step === 2 && (
               <motion.div
-                key={`step${step}`}
+                key="step2"
                 initial="hidden"
                 animate="visible"
                 exit="exit"
@@ -295,9 +275,9 @@ export default function EnrollmentWizard() {
               </motion.div>
             )}
 
-            {step === 4 && (
+            {step === 3 && (
               <motion.div
-                key="step4"
+                key="step3"
                 initial="hidden"
                 animate="visible"
                 exit="exit"
@@ -307,68 +287,31 @@ export default function EnrollmentWizard() {
               >
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    Step 4: Blockchain Attribute Review
+                    Step 3: Blockchain Attribute Review
                   </h3>
                   <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
                     Please review your entered parameters. These will be serialized and cryptographically hashed before commitment.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl space-y-2.5">
-                    <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block border-b border-slate-200 dark:border-slate-800 pb-1.5">Personal Identity</span>
-                    <div><span className="text-slate-400">Name:</span> <strong className="text-slate-700 dark:text-slate-350">{formData.name}</strong></div>
-                    <div><span className="text-slate-400">Email:</span> <span className="text-slate-700 dark:text-slate-350">{formData.email}</span></div>
-                    <div><span className="text-slate-400">Phone:</span> <span className="text-slate-700 dark:text-slate-350">{formData.phone}</span></div>
-                    {formData.role === 'Patient' && (
-                      <>
-                        <div><span className="text-slate-400">DOB:</span> <span className="text-slate-700 dark:text-slate-350">{formData.dob}</span></div>
-                        <div><span className="text-slate-400">Gender:</span> <span className="text-slate-700 dark:text-slate-350">{formData.gender}</span></div>
-                        <div><span className="text-slate-400">Blood Group:</span> <span className="text-slate-700 dark:text-slate-350">{formData.bloodGroup}</span></div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl space-y-2.5">
-                    <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block border-b border-slate-200 dark:border-slate-800 pb-1.5">Professional Details</span>
-                    <div><span className="text-slate-400">System Role:</span> <strong className="text-purple-600 dark:text-purple-400">{formData.role}</strong></div>
-                    {formData.role === 'Doctor' && (
-                      <>
-                        <div><span className="text-slate-400">Reg Number:</span> <span className="text-slate-700 dark:text-slate-350">{formData.regNo}</span></div>
-                        <div><span className="text-slate-400">Specialization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.specialization}</span></div>
-                        <div><span className="text-slate-400">Department:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
-                        <div><span className="text-slate-400">Hospital:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
-                      </>
-                    )}
-                    {formData.role === 'Nurse' && (
-                      <>
-                        <div><span className="text-slate-400">Reg Number:</span> <span className="text-slate-700 dark:text-slate-350">{formData.regNo}</span></div>
-                        <div><span className="text-slate-400">Department:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
-                        <div><span className="text-slate-400">Shift Type:</span> <span className="text-slate-700 dark:text-slate-350">{formData.shiftType}</span></div>
-                        <div><span className="text-slate-400">Organization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
-                      </>
-                    )}
-                    {formData.role === 'Patient' && (
-                      <>
-                        <div><span className="text-slate-400">Patient ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.patientId}</span></div>
-                        <div><span className="text-slate-400">Emergency Phone:</span> <span className="text-slate-700 dark:text-slate-350">{formData.emergencyContact}</span></div>
-                        <div><span className="text-slate-400">Insurance ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.insuranceNo}</span></div>
-                      </>
-                    )}
-                    {formData.role === 'Staff' && (
-                      <>
-                        <div><span className="text-slate-400">Staff ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.staffId}</span></div>
-                        <div><span className="text-slate-400">Department:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
-                        <div><span className="text-slate-400">Organization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
-                      </>
-                    )}
-
-                  </div>
+                <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl space-y-2.5 text-xs max-w-md mx-auto">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block border-b border-slate-200 dark:border-slate-800 pb-1.5">Personal Identity & Role</span>
+                  <div><span className="text-slate-400">System Role:</span> <strong className="text-purple-600 dark:text-purple-400">{formData.role}</strong></div>
+                  <div><span className="text-slate-400">Name:</span> <strong className="text-slate-700 dark:text-slate-350">{formData.name}</strong></div>
+                  <div><span className="text-slate-400">Email:</span> <span className="text-slate-700 dark:text-slate-350">{formData.email}</span></div>
+                  <div><span className="text-slate-400">Phone:</span> <span className="text-slate-700 dark:text-slate-350">{formData.phone}</span></div>
+                  {formData.role === 'Patient' && (
+                    <>
+                      <div><span className="text-slate-400">DOB:</span> <span className="text-slate-700 dark:text-slate-350">{formData.dob}</span></div>
+                      <div><span className="text-slate-400">Gender:</span> <span className="text-slate-700 dark:text-slate-350">{formData.gender}</span></div>
+                      <div><span className="text-slate-400">Blood Group:</span> <span className="text-slate-700 dark:text-slate-350">{formData.bloodGroup}</span></div>
+                    </>
+                  )}
                 </div>
               </motion.div>
             )}
 
-            {step === 5 && (
+            {step === 4 && (
               <motion.div
                 key="step5"
                 initial="hidden"
@@ -451,7 +394,7 @@ export default function EnrollmentWizard() {
             {/* Spacer */}
             <div className="flex-grow" />
 
-            {step < 5 && (
+            {step < 4 && (
               <button
                 type="button"
                 onClick={handleNextStep}
@@ -462,7 +405,7 @@ export default function EnrollmentWizard() {
               </button>
             )}
 
-            {step === 5 && !txDetails && (
+            {step === 4 && !txDetails && (
               <button
                 type="button"
                 disabled={loading}

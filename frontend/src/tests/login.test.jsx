@@ -118,7 +118,7 @@ describe('Login Component', () => {
     // Step 5: Progressive On-chain Verification checks (takes ~5 seconds)
     // Wait for the login function to be called and redirection to occur
     await waitFor(() => {
-      expect(mockLoginFn).toHaveBeenCalledWith('doctor@hospital.org', 'password123', 'Doctor')
+      expect(mockLoginFn).toHaveBeenCalledWith('UID-123456', 'password123', 'Doctor')
       expect(mockNavigate).toHaveBeenCalledWith('/dashboard')
     }, { timeout: 10000 })
   }, 30000) // 30 seconds test timeout

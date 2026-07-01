@@ -69,11 +69,11 @@ export default function AuthenticationWizard({ onBackToSelection }) {
 
   const handleVerificationCompleted = async () => {
     try {
-      // Login with verified details
-      const email = verifiedUser.email || `${verifiedUser.name.toLowerCase().replace(/\s+/g, '.')}@health.com`
+      // Login with verified details (prefer unique certificate ID/UID to identify user)
+      const identifier = verifiedUser.identityId || verifiedUser.email || `${verifiedUser.name.toLowerCase().replace(/\s+/g, '.')}@health.com`
       
       // Call mock login
-      const loggedIn = await login(email, 'password123', verifiedUser.role)
+      const loggedIn = await login(identifier, 'password123', verifiedUser.role)
       
       toast.success(`Welcome back, ${loggedIn.name}!`)
       navigate('/dashboard')

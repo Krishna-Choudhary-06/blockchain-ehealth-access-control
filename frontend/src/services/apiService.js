@@ -32,3 +32,8 @@ export const getLogs = async () => {
     const res = await axios.get(`${API_BASE_URL}/logs`);
     return res.data;
 };
+
+export const getSystemStats = async () => {
+    const res = await axios.get(`${API_BASE_URL}/system-stats`);
+    return res.data;
+};

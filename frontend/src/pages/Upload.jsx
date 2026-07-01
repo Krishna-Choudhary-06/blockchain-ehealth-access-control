@@ -7,9 +7,11 @@ import {
 } from 'react-icons/fi'
 import { encryptFile, shareKeyWithUsers } from '../services/cryptoService'
 import { uploadRecord } from '../services/apiService'
+import { useAuth } from '../hooks/useAuth'
 
 
 export default function Upload() {
+  const { user } = useAuth()
   const [patientName, setPatientName] = useState('')
   const [sensitivityLevel, setSensitivityLevel] = useState('L0')
   const [file, setFile] = useState(null)
@@ -34,6 +36,13 @@ export default function Upload() {
       }
     }
   }, [previewUrl])
+
+  // Autofill patient name if logged-in user is a Patient
+  useEffect(() => {
+    if (user && user.role === 'Patient' && user.name) {
+      setPatientName(user.name)
+    }
+  }, [user])
 
   const sensitivityLevels = [
     { code: 'L0', name: 'L0 - Public', desc: 'Public health dataset or general access.', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30' },

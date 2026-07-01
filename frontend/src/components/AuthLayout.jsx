@@ -2,35 +2,71 @@ import React, { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Activity, ShieldCheck, Database, Award, Users } from 'lucide-react'
 import SecurityBadges from './SecurityBadges'
+import { getSystemStats } from '../services/apiService'
 
 export default function AuthLayout({ children }) {
   const [stats, setStats] = useState({
-    identities: 142,
-    activeNodes: 7,
-    status: 'ONLINE',
-    tps: 45
+    identities: 1,
+    activeNodes: 4,
+    status: 'CONNECTED',
+    tps: 45,
+    latency: '1.2ms'
   })
 
-  // Read registered users count
+  // Read registered users count & query on-chain network stats
   useEffect(() => {
-    try {
-      const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
-      setStats(prev => ({
-        ...prev,
-        identities: 142 + users.length
-      }))
-    } catch (e) {
-      console.error(e)
+    let isMounted = true
+
+    const fetchStats = async () => {
+      let localIdentities = 1
+      try {
+        const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+        localIdentities = Math.max(1, users.length)
+      } catch (e) {
+        console.error(e)
+      }
+
+      try {
+        const res = await getSystemStats()
+        if (res && res.success && isMounted) {
+          setStats({
+            identities: res.identities || localIdentities,
+            activeNodes: res.activeNodes || 4,
+            status: 'CONNECTED',
+            tps: res.tps || 45,
+            latency: res.latency || '1.2ms'
+          })
+          return
+        }
+      } catch (err) {
+        console.warn('Backend system-stats unavailable, using local registry counts.', err)
+      }
+
+      if (isMounted) {
+        setStats(prev => ({
+          ...prev,
+          identities: localIdentities,
+          activeNodes: 4,
+          status: 'CONNECTED',
+          latency: '0.8ms'
+        }))
+      }
     }
+
+    fetchStats()
 
     // Dynamic TPS simulation
     const interval = setInterval(() => {
       setStats(prev => ({
         ...prev,
-        tps: Math.floor(Math.random() * 10) + 40
+        tps: Math.floor(Math.random() * 8) + 40
       }))
-    }, 3000)
-    return () => clearInterval(interval)
+    }, 4000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
   }, [])
 
   return (
@@ -60,7 +96,7 @@ export default function AuthLayout({ children }) {
               <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Fabric Channel Status</span>
               <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 animate-pulse">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                CONNECTED
+                {stats.status}
               </span>
             </div>
 
@@ -74,7 +110,7 @@ export default function AuthLayout({ children }) {
                 <span className="text-white font-bold text-base">{stats.activeNodes} Active</span>
               </div>
               <div className="col-span-2 pt-1.5 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
-                <span>Simulation Latency: <strong className="text-slate-350 font-mono">1.2ms</strong></span>
+                <span>Simulation Latency: <strong className="text-slate-350 font-mono">{stats.latency}</strong></span>
                 <span>TX rate: <strong className="text-slate-350 font-mono">{stats.tps} tps</strong></span>
               </div>
             </div>

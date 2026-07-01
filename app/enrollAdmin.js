@@ -6,8 +6,9 @@ const path = require('path');
 const fs = require('fs');
 
 async function main() {
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
     const ccpPath = path.resolve(
-        process.env.HOME, 'fabric-samples', 'test-network',
+        homeDir, 'fabric-samples', 'test-network',
         'organizations', 'peerOrganizations', 'org1.example.com',
         'connection-org1.json'
     );

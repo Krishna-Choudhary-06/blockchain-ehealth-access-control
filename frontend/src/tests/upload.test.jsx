@@ -11,6 +11,18 @@ vi.mock('react-hot-toast', () => ({
   }
 }))
 
+// Mock cryptoService to avoid slow RSA key generations in jsdom
+vi.mock('../services/cryptoService', () => ({
+  encryptFile: vi.fn(async () => ({
+    encryptedData: new ArrayBuffer(8),
+    key: 'mock-aes-key-hex',
+    iv: 'mock-iv-hex'
+  })),
+  shareKeyWithUsers: vi.fn(async () => ({
+    'mock-doctor-uid': 'mock-encrypted-key-base64'
+  }))
+}))
+
 describe('Upload Component', () => {
   beforeEach(() => {
     vi.useRealTimers()
