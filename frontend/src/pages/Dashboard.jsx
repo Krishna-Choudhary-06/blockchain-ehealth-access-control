@@ -330,6 +330,32 @@ export default function Dashboard() {
     const toastId = toast.loading('Mining access request block into blockchain ledger...')
 
     try {
+      let requesterId = 'DOC-MOCK'
+      if (user?.name) {
+        const keys = localStorage.getItem(`user_keys_${user.name}`)
+        if (keys) {
+          try {
+            requesterId = JSON.parse(keys).userId || requesterId
+          } catch (err) {
+            console.error('Failed to parse keys from localStorage:', err)
+          }
+        } else {
+          const registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
+          const match = registeredUsers.find(u => u.name === user.name)
+          if (match) {
+            requesterId = match.userId
+          }
+        }
+      }
+
+      // Invoke the requestAccess function from our API service
+      try {
+        await requestAccess(requesterId, requestFormData.patientId)
+      } catch (apiErr) {
+        console.warn('Backend API requestAccess failed, falling back to client-side simulation:', apiErr)
+        toast.error('Fabric network offline. Submitting via client-side simulation.', { duration: 4000 })
+      }
+
       await new Promise(resolve => setTimeout(resolve, 1500))
 
       const newRequestId = 'REQ-' + Math.floor(100000 + Math.random() * 900000)
@@ -582,36 +608,79 @@ export default function Dashboard() {
         // Suppress repeated network calls when backend is offline
         const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
         setNetworkUsers(users.length)
+        
+        // Load fallback from localStorage if available
+        const cached = localStorage.getItem('blockchain_audit_trail')
+        if (cached) {
+          try {
+            setAccessLogs(JSON.parse(cached))
+          } catch (e) {
+            console.error('Failed to parse cached audit logs:', e)
+          }
+        }
         return
       }
       try {
         const res = await getLogs()
-        if (res && res.success) {
-          const logsData = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
-          if (Array.isArray(logsData)) {
-            const formatted = logsData.map((log, idx) => ({
-              id: log.txId || `log_${idx}`,
-              user: log.requesterId,
-              role: log.requesterLevel === 'L0' ? 'Doctor' : log.requesterLevel === 'L1' ? 'Lab' : log.requesterLevel === 'L2' ? 'Nurse' : 'Public',
-              action: `Read File ${log.dataId}`,
-              status: log.action === 'GRANTED' ? 'Granted' : 'Denied',
-              timestamp: log.time || new Date().toISOString().replace('T', ' ').substring(0, 19)
-            }))
-            // Sort by timestamp descending
-            formatted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-            setAccessLogs(formatted.slice(0, 10))
-            
-            // Sync success reads count from logs
-            const grantedCount = formatted.filter(l => l.status === 'Granted').length
-            setSuccessReads(grantedCount)
-            
-            // Sync blocks count
-            setBlocksMined(412 + formatted.length)
+        let logsData = null
+        if (res) {
+          if (Array.isArray(res)) {
+            logsData = res
+          } else if (res.success) {
+            logsData = res.data || res.logs
+          } else {
+            logsData = res.data || res.logs || res
+          }
+        }
+        
+        if (typeof logsData === 'string') {
+          try {
+            logsData = JSON.parse(logsData)
+          } catch (e) {
+            console.error('Failed to parse logsData JSON:', e)
+          }
+        }
+
+        if (Array.isArray(logsData)) {
+          const formatted = logsData.map((log, idx) => ({
+            id: log.txId || `log_${idx}`,
+            user: log.requesterId,
+            role: log.requesterLevel === 'L0' ? 'Doctor' : log.requesterLevel === 'L1' ? 'Lab' : log.requesterLevel === 'L2' ? 'Nurse' : 'Public',
+            action: `Read File ${log.dataId}`,
+            status: log.action === 'GRANTED' ? 'Granted' : 'Denied',
+            timestamp: log.time || new Date().toISOString().replace('T', ' ').substring(0, 19)
+          }))
+          // Sort by timestamp descending
+          formatted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          setAccessLogs(formatted.slice(0, 10))
+          localStorage.setItem('blockchain_audit_trail', JSON.stringify(formatted.slice(0, 10)))
+          
+          // Sync success reads count from logs
+          const grantedCount = formatted.filter(l => l.status === 'Granted').length
+          setSuccessReads(grantedCount)
+          
+          // Sync blocks count
+          setBlocksMined(412 + formatted.length)
+        } else {
+          // If response format is invalid, load fallback
+          const cached = localStorage.getItem('blockchain_audit_trail')
+          if (cached) {
+            setAccessLogs(JSON.parse(cached))
           }
         }
       } catch (err) {
         isBackendOffline = true
         console.warn('Backend logs offline. Proceeding with frontend local access history (polling disabled).')
+        
+        // Load fallback logs from localStorage if available
+        const cached = localStorage.getItem('blockchain_audit_trail')
+        if (cached) {
+          try {
+            setAccessLogs(JSON.parse(cached))
+          } catch (e) {
+            console.error('Failed to parse cached audit logs on backend error:', e)
+          }
+        }
       }
 
       // Sync user count from localStorage
