@@ -22,6 +22,10 @@ vi.mock('../services/cryptoService', () => {
     getDelay: vi.fn((ms) => {
       console.log(`--- MOCK getDelay called with ${ms} ---`)
       return 1
+    }),
+    generatePublicKeyFingerprint: vi.fn(() => {
+      console.log('--- MOCK generatePublicKeyFingerprint called ---')
+      return Promise.resolve('UID-MOCKFINGERPRINT')
     })
   }
 })
@@ -38,7 +42,7 @@ vi.mock('../services/apiService', () => ({
   })
 }))
 
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import Register from '../pages/Register'
 import toast from 'react-hot-toast'
@@ -104,19 +108,40 @@ describe('Register Component', () => {
       fireEvent.click(screen.getByRole('button', { name: /Next Step/i }))
     })
 
-    // Wait for Step 3 review page to load
-    await screen.findByText(/Blockchain Attribute Review/i)
+    // Wait for Step 3 professional page to load
+    await screen.findByText(/Step 3: Professional Information/i)
 
-    // Step 3: Review Details and proceed
-    const nextStep3Btn = await screen.findByRole('button', { name: /Next Step/i })
+    // Step 3: Fill Professional Information and proceed
+    const regNoInput = await screen.findByPlaceholderText(/MC-98472/i)
     await act(async () => {
-      fireEvent.click(nextStep3Btn)
+      fireEvent.change(regNoInput, { target: { value: 'MC-98472' } })
+      fireEvent.change(screen.getByPlaceholderText(/Cardiology Department/i), { target: { value: 'Cardiology Department' } })
+      fireEvent.change(screen.getByPlaceholderText(/Metro General Hospital/i), { target: { value: 'Cardiology Department' } })
+      fireEvent.change(screen.getByPlaceholderText(/e\.g\. 8/i), { target: { value: '8' } })
+      
+      const selects = screen.getAllByRole('combobox')
+      fireEvent.change(selects[0], { target: { value: 'Cardiology' } })
+      fireEvent.change(container.querySelector('input[type="date"]'), { target: { value: '2026-12-31' } })
+    })
+    
+    // Wait and click Next Step
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Next Step/i }))
     })
 
-    // Wait for Step 4 enroll page to load
+    // Wait for Step 4 review page to load
+    await screen.findByText(/Blockchain Attribute Review/i)
+
+    // Step 4: Review Details and proceed
+    const nextStep4Btn = await screen.findByRole('button', { name: /Next Step/i })
+    await act(async () => {
+      fireEvent.click(nextStep4Btn)
+    })
+
+    // Wait for Step 5 enroll page to load
     await screen.findByText(/Enroll Cryptographic Identity Node/i)
 
-    // Step 4: Click Enroll Identity
+    // Step 5: Click Enroll Identity
     const enrollBtn = await screen.findByRole('button', { name: /Enroll Identity/i })
     console.log('--- Clicking Enroll Identity ---')
     await act(async () => {
@@ -142,7 +167,7 @@ describe('Register Component', () => {
     console.log('--- SUCCESS text found ---')
     
     expect(screen.getAllByText(/Dr. Sarah Miller/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Not specified/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Consensus Block Hash/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Cardiology Department/i).length).toBeGreaterThan(0)
+    expect(screen.getByText(/Consensus Block Hash/i)).toBeInTheDocument()
   }, 30000)
 })

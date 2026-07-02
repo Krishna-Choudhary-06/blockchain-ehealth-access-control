@@ -228,10 +228,10 @@ export default function Upload() {
         }
       }
       
-      if (!apiResult.success) throw new Error(apiResult.error || 'Upload failed at backend')
+      if (apiResult && apiResult.success === false) throw new Error(apiResult.error || 'Upload failed at backend')
       
       // Getting back the IPFS Hash from the backend
-      const cid = apiResult.data?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
+      const cid = apiResult?.data?.ipfsHash || apiResult?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
 
       // 4. Secure key sharing (RSA-OAEP)
       // Retrieve registered users to encrypt the AES key with their public keys

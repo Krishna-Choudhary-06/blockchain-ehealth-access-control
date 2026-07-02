@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import Upload from '../pages/Upload'
 
@@ -20,6 +20,16 @@ vi.mock('../services/cryptoService', () => ({
   })),
   shareKeyWithUsers: vi.fn(async () => ({
     'mock-doctor-uid': 'mock-encrypted-key-base64'
+  }))
+}))
+
+// Mock apiService to prevent real network requests during tests
+vi.mock('../services/apiService', () => ({
+  uploadRecord: vi.fn(() => Promise.resolve({
+    success: true,
+    data: {
+      ipfsHash: 'QmDummyIPFSHash'
+    }
   }))
 }))
 

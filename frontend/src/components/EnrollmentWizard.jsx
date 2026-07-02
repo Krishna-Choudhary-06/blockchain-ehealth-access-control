@@ -7,7 +7,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, ShieldAlert, 
   Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X 
 } from 'lucide-react'
-import { generateUserKeyPair, getDelay } from '../services/cryptoService'
+import { generateUserKeyPair, getDelay, generatePublicKeyFingerprint } from '../services/cryptoService'
 import { registerUser, assignLevel } from '../services/apiService'
 import StepProgress from './StepProgress'
 import RoleSelector from './RoleSelector'
@@ -126,7 +126,7 @@ export default function EnrollmentWizard() {
 
       await new Promise(resolve => setTimeout(resolve, getDelay(1000)))
       
-      const identityId = 'UID-' + Math.floor(100000 + Math.random() * 900000)
+      const identityId = await generatePublicKeyFingerprint(keyPair.publicKey)
       
       // CALL BACKEND API TO REGISTER USER
       setEnrollmentProgress('Registering identity on Hyperledger Fabric backend...')
