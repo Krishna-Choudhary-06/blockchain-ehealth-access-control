@@ -6,27 +6,20 @@ import AuthLayout from '../components/AuthLayout'
 import AuthenticationWizard from '../components/AuthenticationWizard'
 import AuthSelection from '../components/AuthSelection'
 import AdminLoginCard from '../components/AdminLoginCard'
-import AdminPasswordResetModal from '../components/AdminPasswordResetModal'
-import AuthenticationAnimations from '../components/AuthenticationAnimations'
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const [viewState, setViewState] = useState('selection') // 'selection', 'user_login', 'admin_login', 'admin_verifying'
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
+  const [viewState, setViewState] = useState('selection') // 'selection', 'user_login', 'admin_login'
 
-  const handleAdminLoginSubmit = (credentials) => {
-    setViewState('admin_verifying')
-  }
-
-  const handleAdminVerifyComplete = async () => {
+  const handleAdminLoginSubmit = async (credentials) => {
+    const toastId = toast.loading('Verifying admin clearance...')
     try {
-      await login('admin.key@ehealth.org', 'password123', 'Admin')
-      toast.success('Welcome back, System Administrator!')
+      await login(credentials.username, credentials.password, 'Admin')
+      toast.success('Welcome back, System Administrator!', { id: toastId })
       navigate('/dashboard')
     } catch (error) {
-      toast.error('Admin verification failed.')
-      setViewState('admin_login')
+      toast.error('Admin verification failed.', { id: toastId })
     }
   }
 
@@ -54,21 +47,11 @@ export default function Login() {
           <AuthLayout>
             <AdminLoginCard 
               onSubmit={handleAdminLoginSubmit}
-              onChangePassword={() => setIsPasswordModalOpen(true)}
               onBack={() => setViewState('selection')}
             />
           </AuthLayout>
         )}
-
-        {viewState === 'admin_verifying' && (
-          <AuthenticationAnimations onComplete={handleAdminVerifyComplete} />
-        )}
       </div>
-
-      <AdminPasswordResetModal 
-        isOpen={isPasswordModalOpen}
-        onClose={() => setIsPasswordModalOpen(false)}
-      />
     </div>
   )
 }

@@ -5,9 +5,8 @@ export default function StepProgress({ currentStep }) {
   const steps = [
     { id: 1, label: 'Role', icon: User },
     { id: 2, label: 'Personal', icon: FileText },
-    { id: 3, label: 'Professional', icon: Briefcase },
-    { id: 4, label: 'Review', icon: Shield },
-    { id: 5, label: 'Enroll', icon: Cpu }
+    { id: 3, label: 'Review', icon: Shield },
+    { id: 4, label: 'Enroll', icon: Cpu }
   ]
 
   return (

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { ShieldAlert, Lock, User, ArrowLeft, Shield } from 'lucide-react'
 import SecurityBanner from './SecurityBanner'
 
-export default function AdminLoginCard({ onSubmit, onChangePassword, onBack }) {
+export default function AdminLoginCard({ onSubmit, onBack }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState({})
@@ -114,17 +114,10 @@ export default function AdminLoginCard({ onSubmit, onChangePassword, onBack }) {
         </div>
 
         {/* Buttons */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-100 dark:border-slate-850/80">
-          <button
-            type="button"
-            onClick={onChangePassword}
-            className="w-full sm:w-1/2 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-950 text-xs font-bold text-slate-700 dark:text-slate-300 transition-all cursor-pointer text-center"
-          >
-            Change Password
-          </button>
+        <div className="pt-4 border-t border-slate-100 dark:border-slate-850/80">
           <button
             type="submit"
-            className="w-full sm:w-1/2 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
+            className="w-full py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer"
           >
             Sign In
           </button>
