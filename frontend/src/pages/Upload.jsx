@@ -5,7 +5,7 @@ import {
   FiFile, FiX, FiEye, FiClock, FiDatabase, FiUser, 
   FiAlertCircle, FiArrowRight, FiShield 
 } from 'react-icons/fi'
-import { encryptFile, shareKeyWithUsers } from '../services/cryptoService'
+import { encryptFile, shareKeyWithUsers, addOnChainTx } from '../services/cryptoService'
 import { uploadRecord } from '../services/apiService'
 import { useAuth } from '../hooks/useAuth'
 
@@ -45,10 +45,10 @@ export default function Upload() {
   }, [user])
 
   const sensitivityLevels = [
-    { code: 'L0', name: 'L0 - Public', desc: 'Public health dataset or general access.', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30' },
-    { code: 'L1', name: 'L1 - Basic', desc: 'Clinical support staffs and nurses access.', color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/30' },
-    { code: 'L2', name: 'L2 - Sensitive', desc: 'Access allowed for laboratory diagnostics.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/30' },
-    { code: 'L3', name: 'L3 - Highly Sensitive', desc: 'Restricted only to authorized doctors.', color: 'text-red-500 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30' }
+    { code: 'L0', name: 'L0 - Doctor Only', desc: 'Restricted only to authorized doctors.', color: 'text-red-500 bg-red-50 dark:bg-red-955/20 border-red-200 dark:border-red-900/30' },
+    { code: 'L1', name: 'L1 - Lab Access', desc: 'Access allowed for laboratory diagnostics.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-955/20 border-amber-200 dark:border-amber-900/30' },
+    { code: 'L2', name: 'L2 - Authorized Staff', desc: 'Clinical support staffs and nurses access.', color: 'text-blue-500 bg-blue-50 dark:bg-blue-955/20 border-blue-200 dark:border-blue-900/30' },
+    { code: 'L3', name: 'L3 - Public Access', desc: 'Public health dataset or general access.', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-955/20 border-emerald-200 dark:border-emerald-900/30' }
   ]
 
   // File extension checks
@@ -288,6 +288,9 @@ export default function Upload() {
         sensitivityLevel: sensitivityLevel,
         certificateId: certId
       })
+
+      const uploadBlockNumber = Math.floor(Math.random() * 200) + 420;
+      addOnChainTx(patientName, `Upload Secure Record ${ledgerRecord.id} (Sensitivity: ${sensitivityLevel})`, mockTxId, uploadBlockNumber, 'Granted');
 
       setUploading(false)
       toast.success('Medical record securely committed to Blockchain and IPFS!')

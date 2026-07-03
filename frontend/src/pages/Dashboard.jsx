@@ -15,7 +15,7 @@ import {
   LogOut, ShieldAlert, Award, Grid, Menu, Eye, EyeOff, Radio, Trash2, HelpCircle, Info
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { decryptFile, decryptKeyForUser } from '../services/cryptoService'
+import { decryptFile, decryptKeyForUser, addOnChainTx } from '../services/cryptoService'
 import { downloadFile } from '../services/ipfsService'
 import { getLogs, requestAccess } from '../services/apiService'
 
@@ -228,8 +228,8 @@ export default function Dashboard() {
 
     const combined = [...mappedSaved, ...mappedLedger]
 
-    // Fallback to default lists if the patient is Alex Carter or has no records uploaded yet
-    if (user?.name?.toLowerCase().includes('alex carter') || patientRecordIds.length === 0) {
+    // Fallback to default lists only if the patient is Alex Carter
+    if (user?.name?.toLowerCase().includes('alex carter')) {
       return [...combined, ...defaults]
     }
 
@@ -382,6 +382,9 @@ export default function Dashboard() {
       const updatedRequests = [newRequest, ...accessRequests]
       saveAccessRequests(updatedRequests)
       
+      const reqBlockNumber = Math.floor(Math.random() * 200) + 430
+      addOnChainTx(user?.name || 'Doctor', `Request Access to Record ${newRequest.patientId}`, newRequest.txHash, reqBlockNumber, 'Pending')
+
       toast.success('Access Request successfully submitted to ledger!', { id: toastId })
       setIsRequestModalOpen(false)
       setRequestFormData({
@@ -460,6 +463,20 @@ export default function Dashboard() {
       }
 
       saveAccessRequests(updatedRequests)
+
+      const targetReq = accessRequests.find(r => r.id === requestId)
+      if (targetReq) {
+        const decisionBlockNumber = Math.floor(Math.random() * 200) + 440
+        const decisionTxHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+        addOnChainTx(
+          user?.name || 'Patient',
+          `Access Decision for ${targetReq.doctorName} on Record ${targetReq.patientId}`,
+          decisionTxHash,
+          decisionBlockNumber,
+          nextStatus === 'Approved' ? 'Granted' : 'Denied'
+        )
+      }
+
       toast.success(`Access Request ${nextStatus === 'Approved' ? 'Approved & Enrolled' : 'Rejected'} on ledger!`, { id: toastId })
     } catch (error) {
       toast.error(`Transaction failed: ${error.message}`, { id: toastId })
@@ -2639,6 +2656,25 @@ export default function Dashboard() {
 
   // 11. USER PROFILE PAGE (implementing Checklist Profile Page)
   const renderProfile = () => {
+    const keysKey = `user_keys_${user?.name}`
+    const userKeys = JSON.parse(localStorage.getItem(keysKey) || '{}')
+    const privateKey = userKeys.privateKey || ''
+
+    const downloadProfilePrivateKey = () => {
+      if (!privateKey) {
+        toast.error('No private key available for this profile.')
+        return
+      }
+      const element = document.createElement("a");
+      const file = new Blob([privateKey], {type: 'text/plain'});
+      element.href = URL.createObjectURL(file);
+      element.download = `${user?.name.replace(/\s+/g, '_')}_private_key.pem`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      toast.success('Private key PEM file downloaded successfully!');
+    }
+
     return (
       <div className="space-y-8 animate-fadeIn">
         <div>
@@ -2649,7 +2685,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Profile Details */}
           <div className="lg:col-span-6 space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-6">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-6">
               <div className="flex items-center space-x-4">
                 <img 
                   src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80'} 
@@ -2666,21 +2702,21 @@ export default function Dashboard() {
 
               <div className="border-t border-slate-100 dark:border-slate-800/60 pt-4 space-y-3.5 text-xs">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Email Address</span>
+                  <span className="text-slate-455 dark:text-slate-400">Email Address</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.email || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Organization / Group</span>
+                  <span className="text-slate-455 dark:text-slate-400">Organization / Group</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.organization || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Security Clearance</span>
+                  <span className="text-slate-455 dark:text-slate-400">Security Clearance</span>
                   <span className="font-bold text-blue-600 dark:text-blue-400">
                     {role === 'Admin' ? 'Level 4 (Full System Control)' : role === 'Doctor' ? 'Level 3 (Write/Read Authorized)' : role === 'Nurse' ? 'Level 2 (Read/Update Limited)' : 'Level 1 (Self Records Access)'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Consensus Peer Affinity</span>
+                  <span className="text-slate-455 dark:text-slate-400">Consensus Peer Affinity</span>
                   <span className="font-mono text-[10px] text-slate-600 dark:text-slate-355 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 px-2 py-0.5 rounded">
                     {role === 'Admin' ? 'Peer0.Admin.ehealth.org' : role === 'Doctor' ? 'Peer1.Hospital.ehealth.org' : role === 'Nurse' ? 'Peer2.Lab.ehealth.org' : 'Peer3.Client.ehealth.org'}
                   </span>
@@ -2691,15 +2727,15 @@ export default function Dashboard() {
 
           {/* Cryptographic Certificate */}
           <div className="lg:col-span-6 space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                 <FiShield className="text-emerald-500" />
                 eHealth Digital X.509 Certificate
               </h3>
-              <p className="text-[10px] text-slate-505">Hyperledger Fabric CA Issued identity certificate for securing patient HIPAA compliance logs.</p>
+              <p className="text-[10px] text-slate-500">Hyperledger Fabric CA Issued identity certificate for securing patient HIPAA compliance logs.</p>
               
               <div className="space-y-3 font-semibold text-slate-700 dark:text-slate-300 text-xs">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl space-y-2.5 font-mono text-[10px]">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-955 border border-slate-202 dark:border-slate-855 rounded-2xl space-y-2.5 font-mono text-[10px]">
                   <div className="flex justify-between border-b border-slate-200 dark:border-slate-850 pb-1.5">
                     <span className="text-slate-405">VERSION</span>
                     <span className="text-slate-900 dark:text-white">v3 (X.509)</span>
@@ -2722,13 +2758,37 @@ export default function Dashboard() {
                       {user?.publicKey || 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7p95R3eO3w9oF3d72rGv'}
                       <button 
                         onClick={() => handleCopy(user?.publicKey || 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7p95R3eO3w9oF3d72rGv')}
-                        className="absolute right-2 top-2 p-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-950 dark:hover:bg-slate-900 rounded cursor-pointer"
+                        className="absolute right-2 top-2 p-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-955 dark:hover:bg-slate-900 rounded cursor-pointer"
                         title="Copy Key"
                       >
-                        <FiCopy className="w-3 h-3 text-slate-600 dark:text-slate-400" />
+                        <FiCopy className="w-3 h-3 text-slate-650 dark:text-slate-400" />
                       </button>
                     </div>
                   </div>
+
+                  {privateKey && (
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-850 mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-red-500 font-bold block">X.509 PRIVATE KEY DATA (PEM)</span>
+                        <button 
+                          onClick={downloadProfilePrivateKey}
+                          className="text-[10px] text-purple-650 dark:text-purple-400 hover:underline cursor-pointer font-bold"
+                        >
+                          Download .PEM File
+                        </button>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-2 rounded-xl text-[9px] text-slate-500 dark:text-slate-405 break-all max-h-16 overflow-y-auto font-mono relative group">
+                        {privateKey}
+                        <button 
+                          onClick={() => handleCopy(privateKey)}
+                          className="absolute right-2 top-2 p-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-955 dark:hover:bg-slate-900 rounded cursor-pointer"
+                          title="Copy Key"
+                        >
+                          <FiCopy className="w-3 h-3 text-slate-650 dark:text-slate-400" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

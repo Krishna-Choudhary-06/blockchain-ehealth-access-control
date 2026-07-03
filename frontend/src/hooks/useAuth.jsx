@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password, role) => {
     // Simulate API request delay
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       setTimeout(() => {
         const registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
         let matchedUser = null
@@ -37,9 +37,16 @@ export function AuthProvider({ children }) {
           }
         }
 
-        // If no match by email/id, fallback to search by role
         if (!matchedUser) {
-          matchedUser = registeredUsers.find(u => u.role === role)
+          reject(new Error('User profile registry not found. Please enroll first.'))
+          return
+        }
+
+        // Validate password (if registered user has a password set; otherwise allow 'password123' or 'admin' as default/fallback)
+        const registeredPassword = matchedUser.password || (role === 'Admin' ? 'admin' : 'password123')
+        if (registeredPassword !== password) {
+          reject(new Error('Invalid credentials: Password check failed.'))
+          return
         }
 
         const name = matchedUser ? matchedUser.name : (
@@ -52,7 +59,7 @@ export function AuthProvider({ children }) {
             : 'Patient Alex Carter'
         )
 
-        const organization = matchedUser ? matchedUser.organization : (
+        const organization = matchedUser ? (matchedUser.organization || matchedUser.department) : (
           role === 'Admin' 
             ? 'NIT JAMSHEDPUR' 
             : role === 'Doctor' 
@@ -72,13 +79,13 @@ export function AuthProvider({ children }) {
             role === 'Nurse' ? 'UID-553219' : 'UID-109284'
           ),
           organization,
-          avatar: role === 'Admin' 
+          avatar: matchedUser?.avatar || (role === 'Admin' 
             ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80'
             : role === 'Doctor'
             ? 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=100&h=100&q=80'
             : role === 'Nurse'
             ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=100&h=100&q=80'
-            : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&h=100&q=80',
+            : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&h=100&q=80'),
           publicKey: matchedUser?.publicKey || ''
         }
         setUser(loggedInUser)

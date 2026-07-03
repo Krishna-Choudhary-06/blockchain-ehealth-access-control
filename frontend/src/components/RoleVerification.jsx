@@ -56,11 +56,11 @@ export default function RoleVerification({ verifiedUser, onProceed, onPatientByp
           </div>
 
           <button
-            onClick={onPatientBypass}
+            onClick={onProceed}
             className="w-full mt-2 py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <UserCheck className="w-4 h-4" />
-            Continue Directly to Patient Dashboard
+            Proceed to Password Authentication
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

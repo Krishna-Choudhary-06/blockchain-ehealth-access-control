@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import ValidationMessage from './ValidationMessage'
 
-export default function DynamicRegistrationForm({ register, errors, role, step }) {
+export default function DynamicRegistrationForm({ register, errors, role, step, setValue, watch }) {
   if (step === 2) {
     return (
       <div className="space-y-4 animate-fade-in-up">
@@ -81,6 +81,53 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
               />
             </div>
             <ValidationMessage error={errors.phone} />
+          </div>
+
+          {/* Account Password */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+              Account Password
+            </label>
+            <div className="relative group">
+              <input
+                type="password"
+                {...register('password', { 
+                  required: 'Password is required', 
+                  minLength: { value: 6, message: 'Password must be at least 6 characters' } 
+                })}
+                placeholder="••••••••"
+                className="w-full bg-slate-50/50 dark:bg-slate-955 border border-slate-202 dark:border-slate-900 rounded-xl px-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-650 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-955 focus:border-transparent transition-all text-sm"
+              />
+            </div>
+            <ValidationMessage error={errors.password} />
+          </div>
+
+          {/* Profile Photo (Avatar) */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+              Profile Photo / Avatar Image
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    setValue('avatar', reader.result);
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              className="w-full bg-slate-50/50 dark:bg-slate-955 border border-slate-202 dark:border-slate-900 rounded-xl px-4 py-2 text-slate-900 dark:text-white focus:outline-none text-xs file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-950 dark:file:text-purple-400 cursor-pointer"
+            />
+            {watch && watch('avatar') && (
+              <div className="mt-2 flex items-center gap-2">
+                <img src={watch('avatar')} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800" />
+                <span className="text-[10px] text-slate-500">Photo selected</span>
+              </div>
+            )}
           </div>
 
           {/* Patient Details (DOB, Gender, Blood Group) */}
