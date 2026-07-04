@@ -163,16 +163,9 @@ export default function Dashboard() {
   // Simulated Patient Records (implementing Section 5)
   const [patientRecords, setPatientRecords] = useState(() => {
     const saved = localStorage.getItem('patient_records')
-    const uploaded = saved ? JSON.parse(saved) : []
-    const defaults = [
-      { id: 'PAT-8820', name: 'PAT-8820: Cardiology Report', sensitivity: 'L0', ipfsHash: 'QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco', uploadTime: '2026-06-10 13:42:01', patientName: 'Patient Alex Carter' },
-      { id: 'PAT-3491', name: 'PAT-3491: Blood Panel Analysis', sensitivity: 'L1', ipfsHash: 'QmYwAPJzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWp8xyz', uploadTime: '2026-06-10 12:44:59', patientName: 'Patient Alex Carter' },
-      { id: 'PAT-1092', name: 'PAT-1092: MRI Brain Scan', sensitivity: 'L2', ipfsHash: 'QmZpQRzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWq9abc', uploadTime: '2026-06-10 13:12:44', patientName: 'Patient Alex Carter' },
-      { id: 'PAT-5420', name: 'PAT-5420: General Health Screening', sensitivity: 'L3', ipfsHash: 'QmT123zvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWr0def', uploadTime: '2026-06-09 10:15:30', patientName: 'Patient Alex Carter' }
-    ]
-    const filteredDefaults = defaults.filter(d => !uploaded.some(u => u.id === d.id))
-    return [...uploaded, ...filteredDefaults]
+    return saved ? JSON.parse(saved) : []
   })
+
 
   // Get active record IDs belonging to the logged-in patient
   const patientRecordIds = patientRecords
@@ -218,26 +211,14 @@ export default function Dashboard() {
         }
       })
 
-    const defaults = [
-      { id: 'def-1', user: 'Doctor Amit', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:30 PM', status: 'Granted', recordId: 'PAT-8820' },
-      { id: 'def-2', user: 'Nurse Kelly Smith', action: 'Read Attempt', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:28 PM', status: 'Denied', reason: 'Role permissions restriction (L0)', recordId: 'PAT-8820' },
-      { id: 'def-3', user: 'Dr. Sarah Miller', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '11:15 AM', status: 'Granted', recordId: 'PAT-8820' },
-      { id: 'def-4', user: 'Lab Tech Dave', action: 'Accessed Report', file: 'PAT-3491: Blood Panel Analysis', date: '09 June 2026', time: '04:45 PM', status: 'Granted', recordId: 'PAT-3491' },
-      { id: 'def-5', user: 'Unknown Peer', action: 'Access Request', file: 'PAT-1092: MRI Brain Scan', date: '09 June 2026', time: '09:12 AM', status: 'Denied', reason: 'Consensus ABAC check failure', recordId: 'PAT-1092' }
-    ]
-
     const combined = [...mappedSaved, ...mappedLedger]
-
-    // Fallback to default lists only if the patient is Alex Carter
-    if (user?.name?.toLowerCase().includes('alex carter')) {
-      return [...combined, ...defaults]
-    }
 
     return combined.filter(item => {
       const matched = item.file.match(/PAT-\d+/)
       const dataId = matched ? matched[0] : item.recordId
       return patientRecordIds.includes(dataId)
     })
+
   }
 
   // Doctor Specific States (for decrypting files)
@@ -251,11 +232,19 @@ export default function Dashboard() {
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false)
   const [isRequestSubmitting, setIsRequestSubmitting] = useState(false)
   const [requestFormData, setRequestFormData] = useState({
-    patientId: 'PAT-8820',
+    patientId: '',
     recordType: 'Cardiology Report',
     purpose: '',
     duration: '24 Hours'
   })
+
+  // Set default patient ID when records load
+  useEffect(() => {
+    if (patientRecords.length > 0 && !requestFormData.patientId) {
+      setRequestFormData(prev => ({ ...prev, patientId: patientRecords[0].id }))
+    }
+  }, [patientRecords])
+
 
   // Load access requests on mount
   useEffect(() => {
@@ -517,10 +506,9 @@ export default function Dashboard() {
         const doctorUserId = docKeys.userId
         const privateKey = docKeys.privateKey
 
-        const encryptedSymmetricKey = record.sharedKeys[doctorUserId]
-        if (!encryptedSymmetricKey) {
-          throw new Error(`Access Denied: You do not have security clearance for this record.`)
-        }
+        let encryptedSymmetricKey = record.sharedKeys[doctorUserId]
+        let ipfsHash = record.ipfsHash
+        let ivHex = record.ivHex
 
         // Call real backend Fabric ABAC validation
         try {
@@ -530,14 +518,24 @@ export default function Dashboard() {
             if (dataAccessResult.status !== 'ACCESS_GRANTED') {
               throw new Error(dataAccessResult.message || 'ABAC permission check rejected on ledger.')
             }
+            // Dynamically override from blockchain state
+            if (dataAccessResult.ipfsHash) ipfsHash = dataAccessResult.ipfsHash
+            if (dataAccessResult.iv) ivHex = dataAccessResult.iv
+            if (dataAccessResult.encryptedKeyForYou) {
+              encryptedSymmetricKey = dataAccessResult.encryptedKeyForYou
+            }
           }
         } catch (apiErr) {
           console.warn('Backend ledger access control check failed/offline:', apiErr)
         }
 
+        if (!encryptedSymmetricKey) {
+          throw new Error(`Access Denied: You do not have security clearance for this record.`)
+        }
+
         const aesKeyHex = await decryptKeyForUser(encryptedSymmetricKey, privateKey)
-        const encryptedFileBuffer = await downloadFile(record.ipfsHash)
-        const decryptedFileBuffer = await decryptFile(encryptedFileBuffer, aesKeyHex, record.ivHex)
+        const encryptedFileBuffer = await downloadFile(ipfsHash)
+        const decryptedFileBuffer = await decryptFile(encryptedFileBuffer, aesKeyHex, ivHex)
 
         const dec = new TextDecoder()
         const plaintext = dec.decode(decryptedFileBuffer)
@@ -571,18 +569,17 @@ export default function Dashboard() {
 
   const myApprovedRequests = accessRequests.filter(req => 
     req.status === 'Approved' && 
-    (req.patientName?.toLowerCase().includes(user?.name?.toLowerCase() || '') || 
-     user?.name?.toLowerCase().includes('alex carter'))
+    (req.patientName?.toLowerCase().includes(user?.name?.toLowerCase() || ''))
   )
   const uniqueDocs = new Set(myApprovedRequests.map(req => req.doctorName))
-  const authorizedDocsCount = uniqueDocs.size || (user?.name?.toLowerCase().includes('alex carter') ? 3 : 0)
+  const authorizedDocsCount = uniqueDocs.size
 
   const myPendingRequests = accessRequests.filter(req => 
     req.status === 'Pending' && 
-    (req.patientName?.toLowerCase().includes(user?.name?.toLowerCase() || '') || 
-     user?.name?.toLowerCase().includes('alex carter'))
+    (req.patientName?.toLowerCase().includes(user?.name?.toLowerCase() || ''))
   )
   const pendingCount = myPendingRequests.length
+
 
   const doctorPendingCount = accessRequests.filter(req => 
     req.status === 'Pending' && 
@@ -659,14 +656,20 @@ export default function Dashboard() {
         }
 
         if (Array.isArray(logsData)) {
-          const formatted = logsData.map((log, idx) => ({
-            id: log.txId || `log_${idx}`,
-            user: log.requesterId,
-            role: log.requesterLevel === 'L0' ? 'Doctor' : log.requesterLevel === 'L1' ? 'Lab' : log.requesterLevel === 'L2' ? 'Nurse' : 'Public',
-            action: `Read File ${log.dataId}`,
-            status: log.action === 'GRANTED' ? 'Granted' : 'Denied',
-            timestamp: log.time || new Date().toISOString().replace('T', ' ').substring(0, 19)
-          }))
+          const registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
+          const formatted = logsData.map((log, idx) => {
+            const matchedUser = registeredUsers.find(u => u.userId === log.requesterId)
+            const userRole = matchedUser ? matchedUser.role : (log.requesterLevel === 'L0' ? 'Doctor' : log.requesterLevel === 'L1' ? 'Lab' : log.requesterLevel === 'L2' ? 'Nurse' : 'Public')
+            const userName = matchedUser ? matchedUser.name : log.requesterId
+            return {
+              id: log.txId || `log_${idx}`,
+              user: userName,
+              role: userRole,
+              action: `Read File ${log.dataId}`,
+              status: (log.status === 'GRANTED' || log.action === 'GRANTED') ? 'Granted' : 'Denied',
+              timestamp: log.timestamp || log.time || new Date().toISOString().replace('T', ' ').substring(0, 19)
+            }
+          })
           // Sort by timestamp descending
           formatted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
           setAccessLogs(formatted.slice(0, 10))
@@ -1132,7 +1135,7 @@ export default function Dashboard() {
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Approve or reject clinical requests querying your secure records.</p>
           </div>
 
-          {accessRequests.filter(req => req.status === 'Pending' && req.patientName.toLowerCase().includes(user?.name?.toLowerCase() || 'alex carter')).length === 0 ? (
+          {accessRequests.filter(req => req.status === 'Pending' && req.patientName.toLowerCase().includes(user?.name?.toLowerCase() || '')).length === 0 ? (
             <div className="text-center py-10 text-slate-450 dark:text-slate-650 flex flex-col items-center justify-center">
               <svg className="w-10 h-10 mb-2.5 opacity-30 animate-pulse" stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -1154,7 +1157,7 @@ export default function Dashboard() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
                   {accessRequests
-                    .filter(req => req.status === 'Pending' && req.patientName.toLowerCase().includes(user?.name?.toLowerCase() || 'alex carter'))
+                    .filter(req => req.status === 'Pending' && req.patientName.toLowerCase().includes(user?.name?.toLowerCase() || ''))
                     .map((req) => (
                       <tr key={req.id} className="hover:bg-slate-50/30 dark:hover:bg-slate-950/10 transition-colors">
                         <td className="py-4 pl-2 space-y-0.5">
@@ -1460,25 +1463,18 @@ export default function Dashboard() {
   const renderDoctorRecords = () => {
     // Map patient records to Doctor's workspace records
     const doctorPatients = patientRecords.map(rec => {
-      let authorized = true
+      let authorized = false
       if (rec.sharedKeys) {
         // Real record: check if Doctor's key is present
         const docKeysSaved = localStorage.getItem(`user_keys_${user.name}`)
         if (docKeysSaved) {
           const docKeys = JSON.parse(docKeysSaved)
           authorized = !!rec.sharedKeys[docKeys.userId]
-        } else {
-          authorized = false
-        }
-      } else {
-        // Static defaults fallback
-        if (rec.id === 'PAT-7720') {
-          authorized = false
         }
       }
       return {
         id: rec.id,
-        patient: rec.patientName || 'Alex Carter',
+        patient: rec.patientName || 'Unknown Patient',
         file: rec.fileName || rec.name,
         sensitivity: rec.sensitivity,
         authorized: authorized,
@@ -2874,9 +2870,12 @@ export default function Dashboard() {
                   onChange={(e) => setRequestFormData(prev => ({ ...prev, patientId: e.target.value }))}
                   className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-205 dark:border-slate-850 rounded-xl px-3.5 py-3 text-slate-900 dark:text-white font-mono focus:ring-1 focus:ring-purple-500 focus:outline-none cursor-pointer"
                 >
-                  <option value="PAT-8820">PAT-8820 (Patient Alex Carter)</option>
-                  <option value="PAT-3491">PAT-3491 (Patient Alice Johnson)</option>
-                  <option value="PAT-1092">PAT-1092 (Patient Bob Smith)</option>
+                  {patientRecords.map(rec => (
+                    <option key={rec.id} value={rec.id}>{rec.id} ({rec.patientName})</option>
+                  ))}
+                  {patientRecords.length === 0 && (
+                    <option value="">No patient records available</option>
+                  )}
                 </select>
               </div>
 

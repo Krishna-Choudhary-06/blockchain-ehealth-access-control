@@ -3,7 +3,15 @@ import axios from 'axios';
 const IPFS_API_URL = 'http://127.0.0.1:5001/api/v0';
 
 // In-memory mock storage for testing and offline fallback
-const mockIpfsStorage = new Map();
+export const mockIpfsStorage = new Map();
+
+/**
+ * Caches content locally in mock storage for offline/robust fallback
+ */
+export function cacheMockIpfs(cid, data) {
+  mockIpfsStorage.set(cid, data);
+}
+
 
 /**
  * Uploads a file buffer (or blob) to IPFS.
@@ -65,6 +73,18 @@ export async function downloadFile(cid) {
     return new Blob([data]).arrayBuffer();
   }
 
+  // Try retrieving via backend proxy first
+  try {
+    const response = await axios.get(`http://localhost:3000/api/ipfs/${cid}`, {
+      responseType: 'arraybuffer',
+      timeout: 2000
+    });
+    if (response.data) return response.data;
+  } catch (backendErr) {
+    console.warn(`Backend IPFS proxy endpoint failed or unavailable. Falling back to local daemon: ${backendErr.message}`);
+  }
+
+  // Fallback to local IPFS daemon directly
   try {
     const response = await axios.post(`${IPFS_API_URL}/cat?arg=${cid}`, null, {
       responseType: 'arraybuffer',

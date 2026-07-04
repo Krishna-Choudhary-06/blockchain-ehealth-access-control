@@ -20,7 +20,8 @@ vi.mock('../services/cryptoService', () => ({
   })),
   shareKeyWithUsers: vi.fn(async () => ({
     'mock-doctor-uid': 'mock-encrypted-key-base64'
-  }))
+  })),
+  addOnChainTx: vi.fn()
 }))
 
 // Mock apiService to prevent real network requests during tests

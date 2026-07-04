@@ -26,6 +26,9 @@ vi.mock('../services/cryptoService', () => {
     generatePublicKeyFingerprint: vi.fn(() => {
       console.log('--- MOCK generatePublicKeyFingerprint called ---')
       return Promise.resolve('UID-MOCKFINGERPRINT')
+    }),
+    addOnChainTx: vi.fn(() => {
+      console.log('--- MOCK addOnChainTx called ---')
     })
   }
 })
@@ -103,6 +106,7 @@ describe('Register Component', () => {
       fireEvent.change(nameInput, { target: { value: 'Dr. Sarah Miller' } })
       fireEvent.change(screen.getByPlaceholderText(/hospital\.com/i), { target: { value: 'doctor@hospital.org' } })
       fireEvent.change(screen.getByPlaceholderText(/\+14155552671/i), { target: { value: '+14155552671' } })
+      fireEvent.change(screen.getByPlaceholderText(/••••••••/i), { target: { value: 'password123' } })
     })
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Next Step/i }))

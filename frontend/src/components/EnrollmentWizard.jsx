@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArrowLeft, ArrowRight, CheckCircle, Loader2, ShieldAlert, 
-  Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X 
+  Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X, Shield 
 } from 'lucide-react'
 import { generateUserKeyPair, getDelay, generatePublicKeyFingerprint, addOnChainTx } from '../services/cryptoService'
 import { registerUser, assignLevel } from '../services/apiService'
@@ -20,6 +20,7 @@ export default function EnrollmentWizard() {
   const [loading, setLoading] = useState(false)
   const [txDetails, setTxDetails] = useState(null)
   const [copiedKey, setCopiedKey] = useState(false)
+  const [copiedPrivateKey, setCopiedPrivateKey] = useState(false)
   const [enrollmentProgress, setEnrollmentProgress] = useState('')
 
   const {
