@@ -8,6 +8,8 @@ import {
 import { encryptFile, shareKeyWithUsers, addOnChainTx } from '../services/cryptoService'
 import { uploadRecord } from '../services/apiService'
 import { useAuth } from '../hooks/useAuth'
+import { cacheMockIpfs } from '../services/ipfsService'
+
 
 
 export default function Upload() {
@@ -212,9 +214,19 @@ export default function Upload() {
       const reverseMapping = { 'L0': 'L3', 'L1': 'L2', 'L2': 'L1', 'L3': 'L0' }
       const mappedLevel = reverseMapping[sensitivityLevel] || 'L3'
 
+      // Resolve actual registered patientId from localStorage or session
+      let resolvedPatientId = patientName.replace(/ /g, '')
+      const registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
+      const matchedUser = registeredUsers.find(u => u.name.toLowerCase() === patientName.toLowerCase())
+      if (matchedUser) {
+        resolvedPatientId = matchedUser.userId
+      } else if (user && user.role === 'Patient' && user.name.toLowerCase() === patientName.toLowerCase()) {
+        resolvedPatientId = user.userId
+      }
+
       let apiResult
       try {
-        apiResult = await uploadRecord(patientName.replace(/ /g, ''), fileId, mappedLevel, encryptedFileObj)
+        apiResult = await uploadRecord(resolvedPatientId, fileId, mappedLevel, encryptedFileObj)
       } catch (apiErr) {
         console.warn('Backend API upload failed, falling back to client-side IPFS simulation:', apiErr)
         toast.error('Fabric network offline. Uploading via local client-side IPFS simulation.', { duration: 4000 })
@@ -233,9 +245,12 @@ export default function Upload() {
       // Getting back the IPFS Hash from the backend
       const cid = apiResult?.data?.ipfsHash || apiResult?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
 
+      // Cache the encrypted file data buffer in the mock IPFS registry for robust fallback retrieval
+      cacheMockIpfs(cid, encryptedData)
+
+
       // 4. Secure key sharing (RSA-OAEP)
       // Retrieve registered users to encrypt the AES key with their public keys
-      const registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
       const usersToShareWith = registeredUsers.filter(u => {
         if (u.role === 'Doctor' || u.role === 'Admin') return true
         if (sensitivityLevel === 'L2' || sensitivityLevel === 'L3') {
@@ -399,7 +414,7 @@ export default function Upload() {
                     const mockContent = `PATIENT NAME: Alex Carter\nDIAGNOSIS: Stable recovery following mild exercise-induced arrhythmia.\nRECOMMENDED TREATMENT: Daily cardiovascular checkups, low-sodium diet, and moderate physical activities.\nRESTRICTION LEVEL: Highly Confidential\nGENOMIC DATA SHA-256: 3a9a141b7829ac252dbef23f8b0e7a2b0e9f1a2380d90d81014ac2460d5b78ab\n`;
                     const mockFile = new File([mockContent], 'medical_report.pdf', { type: 'application/pdf' });
                     setFile(mockFile);
-                    setReportId('MOCK-REP');
+                    setReportId('PAT-' + Math.floor(1000 + Math.random() * 9000));
                     toast.success('Mock file loaded successfully!');
                   }}
                   className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350 rounded-2xl py-3.5 font-bold text-xs border border-dashed border-slate-300 dark:border-slate-800 transition-all text-center cursor-pointer mb-2"
