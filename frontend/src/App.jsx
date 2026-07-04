@@ -9,11 +9,6 @@ import Dashboard from './pages/Dashboard'
 import Upload from './pages/Upload'
 import Explorer from './pages/Explorer'
 import Performance from './pages/Performance'
-import AccessRequests from './pages/AccessRequests'
-import AccessHistory from './pages/AccessHistory'
-import ConsentManagement from './pages/ConsentManagement'
-import PatientRecords from './pages/PatientRecords'
-import AuditTrail from './pages/AuditTrail'
 import { useAuth } from './hooks/useAuth'
 import ErrorBoundary from './components/ErrorBoundary'
 
@@ -48,11 +43,6 @@ function App() {
 
         {/* Secure Dashboard View */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/requests" element={<PrivateRoute><AccessRequests /></PrivateRoute>} />
-        <Route path="/history" element={<PrivateRoute><AccessHistory /></PrivateRoute>} />
-        <Route path="/consent" element={<PrivateRoute><ErrorBoundary><ConsentManagement /></ErrorBoundary></PrivateRoute>} />
-        <Route path="/records" element={<PrivateRoute><PatientRecords /></PrivateRoute>} />
-        <Route path="/audit" element={<PrivateRoute><ErrorBoundary><AuditTrail /></ErrorBoundary></PrivateRoute>} />
         <Route path="/upload" element={<PrivateRoute><Upload /></PrivateRoute>} />
         <Route path="/explorer" element={<PrivateRoute><ErrorBoundary><Explorer /></ErrorBoundary></PrivateRoute>} />
         <Route path="/performance" element={<PrivateRoute><ErrorBoundary><Performance /></ErrorBoundary></PrivateRoute>} />

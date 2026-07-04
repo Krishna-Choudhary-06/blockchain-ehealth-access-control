@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import Upload from '../pages/Upload'
 
@@ -9,6 +9,28 @@ vi.mock('react-hot-toast', () => ({
     success: vi.fn(),
     error: vi.fn()
   }
+}))
+
+// Mock cryptoService to avoid slow RSA key generations in jsdom
+vi.mock('../services/cryptoService', () => ({
+  encryptFile: vi.fn(async () => ({
+    encryptedData: new ArrayBuffer(8),
+    key: 'mock-aes-key-hex',
+    iv: 'mock-iv-hex'
+  })),
+  shareKeyWithUsers: vi.fn(async () => ({
+    'mock-doctor-uid': 'mock-encrypted-key-base64'
+  }))
+}))
+
+// Mock apiService to prevent real network requests during tests
+vi.mock('../services/apiService', () => ({
+  uploadRecord: vi.fn(() => Promise.resolve({
+    success: true,
+    data: {
+      ipfsHash: 'QmDummyIPFSHash'
+    }
+  }))
 }))
 
 describe('Upload Component', () => {

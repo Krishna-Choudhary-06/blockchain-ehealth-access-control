@@ -7,7 +7,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, ShieldAlert, 
   Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X 
 } from 'lucide-react'
-import { generateUserKeyPair, getDelay } from '../services/cryptoService'
+import { generateUserKeyPair, getDelay, generatePublicKeyFingerprint, addOnChainTx } from '../services/cryptoService'
 import { registerUser, assignLevel } from '../services/apiService'
 import StepProgress from './StepProgress'
 import RoleSelector from './RoleSelector'
@@ -37,6 +37,8 @@ export default function EnrollmentWizard() {
       name: '',
       email: '',
       phone: '',
+      password: '',
+      avatar: '',
       organization: '',
       department: '',
       specialization: '',
@@ -76,7 +78,7 @@ export default function EnrollmentWizard() {
 
     if (step === 2) {
       // Validate Step 2 fields based on role
-      const fieldsToValidate = ['name', 'email', 'phone']
+      const fieldsToValidate = ['name', 'email', 'phone', 'password']
       if (formData.role === 'Patient') {
         fieldsToValidate.push('dob', 'gender', 'bloodGroup')
       }
@@ -90,29 +92,7 @@ export default function EnrollmentWizard() {
     }
 
     if (step === 3) {
-      // Validate Step 3 fields based on role
-      let fieldsToValidate = []
-      if (formData.role === 'Doctor') {
-        fieldsToValidate = ['regNo', 'specialization', 'department', 'organization', 'experience', 'licenseExpiry']
-      } else if (formData.role === 'Nurse') {
-        fieldsToValidate = ['regNo', 'department', 'shiftType', 'organization', 'experience']
-      } else if (formData.role === 'Patient') {
-        fieldsToValidate = ['patientId', 'emergencyContact', 'insuranceNo']
-      } else if (formData.role === 'Staff') {
-        fieldsToValidate = ['staffId', 'department', 'organization']
-      }
-
-      const isStep3Valid = await trigger(fieldsToValidate)
-      if (isStep3Valid) {
-        setStep(4)
-      } else {
-        toast.error('Please fix the errors in Professional Information.')
-      }
-      return
-    }
-
-    if (step === 4) {
-      setStep(5)
+      setStep(4)
       return
     }
   }
@@ -128,6 +108,24 @@ export default function EnrollmentWizard() {
     setCopiedKey(true)
     toast.success('Public key copied to clipboard!')
     setTimeout(() => setCopiedKey(false), 2000)
+  }
+
+  const handleCopyPrivateKey = (text) => {
+    navigator.clipboard.writeText(text)
+    setCopiedPrivateKey(true)
+    toast.success('Private key copied to clipboard! Keep this extremely secure.')
+    setTimeout(() => setCopiedPrivateKey(false), 2000)
+  }
+
+  const handleDownloadPrivateKey = (privateKeyPem, userName) => {
+    const element = document.createElement("a");
+    const file = new Blob([privateKeyPem], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `${userName.replace(/\s+/g, '_')}_private_key.pem`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    toast.success('Private key PEM file downloaded!');
   }
 
   const handleEnrollIdentity = async () => {
@@ -148,7 +146,7 @@ export default function EnrollmentWizard() {
 
       await new Promise(resolve => setTimeout(resolve, getDelay(1000)))
       
-      const identityId = 'UID-' + Math.floor(100000 + Math.random() * 900000)
+      const identityId = await generatePublicKeyFingerprint(keyPair.publicKey)
       
       // CALL BACKEND API TO REGISTER USER
       setEnrollmentProgress('Registering identity on Hyperledger Fabric backend...')
@@ -170,7 +168,7 @@ export default function EnrollmentWizard() {
       // Assign privacy level
       let securityLvl = 'L1'
       if (formData.role === 'Admin') securityLvl = 'L3'
-      else if (formData.role === 'Doctor') securityLvl = 'L2'
+      else if (formData.role === 'Doctor') securityLvl = 'L3'
       else if (formData.role === 'Nurse') securityLvl = 'L2'
       if (formData.securityLevel) securityLvl = 'L' + formData.securityLevel
 
@@ -191,9 +189,13 @@ export default function EnrollmentWizard() {
         userId: identityId,
         name: formData.name,
         role: formData.role,
+        email: formData.email,
+        phone: formData.phone,
         organization: finalOrg,
         publicKey: keyPair.publicKey,
-        privateKey: keyPair.privateKey
+        privateKey: keyPair.privateKey,
+        password: formData.password,
+        avatar: formData.avatar || ''
       }))
 
       // Save to registered users list
@@ -203,7 +205,8 @@ export default function EnrollmentWizard() {
         name: formData.name,
         role: formData.role,
         organization: finalOrg,
-        publicKey: keyPair.publicKey
+        publicKey: keyPair.publicKey,
+        avatar: formData.avatar || ''
       })
       localStorage.setItem('registered_users', JSON.stringify(existingUsers))
 
@@ -216,10 +219,12 @@ export default function EnrollmentWizard() {
         role: formData.role,
         organization: finalOrg,
         identityId: identityId,
-        publicKey: keyPair.publicKey
+        publicKey: keyPair.publicKey,
+        privateKey: keyPair.privateKey
       }
 
       setTxDetails(transactionData)
+      addOnChainTx(formData.name, `Register User Identity (Role: ${formData.role})`, mockTxHash, transactionData.blockNumber, 'Granted')
       setLoading(false)
       toast.success('Identity node enrolled and committed to ledger!', { id: toastId })
     } catch (error) {
@@ -275,9 +280,9 @@ export default function EnrollmentWizard() {
               </motion.div>
             )}
 
-            {(step === 2 || step === 3) && (
+            {step === 2 && (
               <motion.div
-                key={`step${step}`}
+                key="step2"
                 initial="hidden"
                 animate="visible"
                 exit="exit"
@@ -290,14 +295,16 @@ export default function EnrollmentWizard() {
                     errors={errors} 
                     role={formData.role} 
                     step={step} 
+                    setValue={setValue}
+                    watch={watch}
                   />
                 </form>
               </motion.div>
             )}
 
-            {step === 4 && (
+            {step === 3 && (
               <motion.div
-                key="step4"
+                key="step3"
                 initial="hidden"
                 animate="visible"
                 exit="exit"
@@ -307,68 +314,31 @@ export default function EnrollmentWizard() {
               >
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                    Step 4: Blockchain Attribute Review
+                    Step 3: Blockchain Attribute Review
                   </h3>
                   <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
                     Please review your entered parameters. These will be serialized and cryptographically hashed before commitment.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl space-y-2.5">
-                    <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block border-b border-slate-200 dark:border-slate-800 pb-1.5">Personal Identity</span>
-                    <div><span className="text-slate-400">Name:</span> <strong className="text-slate-700 dark:text-slate-350">{formData.name}</strong></div>
-                    <div><span className="text-slate-400">Email:</span> <span className="text-slate-700 dark:text-slate-350">{formData.email}</span></div>
-                    <div><span className="text-slate-400">Phone:</span> <span className="text-slate-700 dark:text-slate-350">{formData.phone}</span></div>
-                    {formData.role === 'Patient' && (
-                      <>
-                        <div><span className="text-slate-400">DOB:</span> <span className="text-slate-700 dark:text-slate-350">{formData.dob}</span></div>
-                        <div><span className="text-slate-400">Gender:</span> <span className="text-slate-700 dark:text-slate-350">{formData.gender}</span></div>
-                        <div><span className="text-slate-400">Blood Group:</span> <span className="text-slate-700 dark:text-slate-350">{formData.bloodGroup}</span></div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl space-y-2.5">
-                    <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block border-b border-slate-200 dark:border-slate-800 pb-1.5">Professional Details</span>
-                    <div><span className="text-slate-400">System Role:</span> <strong className="text-purple-600 dark:text-purple-400">{formData.role}</strong></div>
-                    {formData.role === 'Doctor' && (
-                      <>
-                        <div><span className="text-slate-400">Reg Number:</span> <span className="text-slate-700 dark:text-slate-350">{formData.regNo}</span></div>
-                        <div><span className="text-slate-400">Specialization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.specialization}</span></div>
-                        <div><span className="text-slate-400">Department:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
-                        <div><span className="text-slate-400">Hospital:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
-                      </>
-                    )}
-                    {formData.role === 'Nurse' && (
-                      <>
-                        <div><span className="text-slate-400">Reg Number:</span> <span className="text-slate-700 dark:text-slate-350">{formData.regNo}</span></div>
-                        <div><span className="text-slate-400">Department:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
-                        <div><span className="text-slate-400">Shift Type:</span> <span className="text-slate-700 dark:text-slate-350">{formData.shiftType}</span></div>
-                        <div><span className="text-slate-400">Organization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
-                      </>
-                    )}
-                    {formData.role === 'Patient' && (
-                      <>
-                        <div><span className="text-slate-400">Patient ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.patientId}</span></div>
-                        <div><span className="text-slate-400">Emergency Phone:</span> <span className="text-slate-700 dark:text-slate-350">{formData.emergencyContact}</span></div>
-                        <div><span className="text-slate-400">Insurance ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.insuranceNo}</span></div>
-                      </>
-                    )}
-                    {formData.role === 'Staff' && (
-                      <>
-                        <div><span className="text-slate-400">Staff ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.staffId}</span></div>
-                        <div><span className="text-slate-400">Department:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
-                        <div><span className="text-slate-400">Organization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
-                      </>
-                    )}
-
-                  </div>
+                <div className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl space-y-2.5 text-xs max-w-md mx-auto">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block border-b border-slate-200 dark:border-slate-800 pb-1.5">Personal Identity & Role</span>
+                  <div><span className="text-slate-400">System Role:</span> <strong className="text-purple-600 dark:text-purple-400">{formData.role}</strong></div>
+                  <div><span className="text-slate-400">Name:</span> <strong className="text-slate-700 dark:text-slate-350">{formData.name}</strong></div>
+                  <div><span className="text-slate-400">Email:</span> <span className="text-slate-700 dark:text-slate-350">{formData.email}</span></div>
+                  <div><span className="text-slate-400">Phone:</span> <span className="text-slate-700 dark:text-slate-350">{formData.phone}</span></div>
+                  {formData.role === 'Patient' && (
+                    <>
+                      <div><span className="text-slate-400">DOB:</span> <span className="text-slate-700 dark:text-slate-350">{formData.dob}</span></div>
+                      <div><span className="text-slate-400">Gender:</span> <span className="text-slate-700 dark:text-slate-350">{formData.gender}</span></div>
+                      <div><span className="text-slate-400">Blood Group:</span> <span className="text-slate-700 dark:text-slate-350">{formData.bloodGroup}</span></div>
+                    </>
+                  )}
                 </div>
               </motion.div>
             )}
 
-            {step === 5 && (
+            {step === 4 && (
               <motion.div
                 key="step5"
                 initial="hidden"
@@ -451,7 +421,7 @@ export default function EnrollmentWizard() {
             {/* Spacer */}
             <div className="flex-grow" />
 
-            {step < 5 && (
+            {step < 4 && (
               <button
                 type="button"
                 onClick={handleNextStep}
@@ -462,7 +432,7 @@ export default function EnrollmentWizard() {
               </button>
             )}
 
-            {step === 5 && !txDetails && (
+            {step === 4 && !txDetails && (
               <button
                 type="button"
                 disabled={loading}
@@ -569,16 +539,49 @@ export default function EnrollmentWizard() {
                       <Key className="w-3.5 h-3.5" /> Generated RSA-OAEP Public Key
                     </span>
                     <button
+                      type="button"
                       onClick={() => handleCopyKey(txDetails.publicKey)}
                       className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      {copiedKey ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      Copy PEM
+                      {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      Copy Public PEM
                     </button>
                   </div>
-                  <pre className="p-3 bg-slate-950 text-slate-400 rounded-xl font-mono text-[8px] leading-normal overflow-y-auto max-h-[100px] border border-slate-900">
+                  <pre className="p-3 bg-slate-950 text-slate-400 rounded-xl font-mono text-[8px] leading-normal overflow-y-auto max-h-[80px] border border-slate-900">
                     {txDetails.publicKey}
                   </pre>
+                </div>
+
+                {/* Private Key Display */}
+                <div className="border border-red-500/10 bg-red-500/5 rounded-2xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] uppercase tracking-wider text-red-500 font-bold flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" /> Generated RSA-OAEP Private Key (Keep Secret!)
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPrivateKey(txDetails.privateKey)}
+                        className="text-[10px] text-red-650 dark:text-red-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        {copiedPrivateKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        Copy Private PEM
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPrivateKey(txDetails.privateKey, txDetails.name)}
+                        className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        Download .PEM File
+                      </button>
+                    </div>
+                  </div>
+                  <pre className="p-3 bg-slate-950 text-slate-400 rounded-xl font-mono text-[8px] leading-normal overflow-y-auto max-h-[85px] border border-slate-900">
+                    {txDetails.privateKey}
+                  </pre>
+                  <p className="text-[9px] text-red-600 dark:text-red-400 leading-normal font-semibold">
+                    ⚠️ You MUST download or copy this Private Key file now! You will need to upload/provide it to log in and sign transactions in the workspace.
+                  </p>
                 </div>
               </div>
 

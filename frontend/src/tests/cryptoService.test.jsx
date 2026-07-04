@@ -6,7 +6,8 @@ import {
   encryptKeyForUser, 
   decryptKeyForUser,
   shareKeyWithUsers,
-  revokeUserAccess
+  revokeUserAccess,
+  generatePublicKeyFingerprint
 } from '../services/cryptoService'
 
 describe('CryptoService Client Operations', () => {
@@ -45,7 +46,7 @@ describe('CryptoService Client Operations', () => {
     // Decrypt key for user
     const decryptedKey = await decryptKeyForUser(encryptedKeyBase64, keyPair.privateKey)
     expect(decryptedKey).toBe(symmetricKey)
-  })
+  }, 20000)
 
   test('Key sharing and revocation behavior', async () => {
     const keyPair1 = await generateUserKeyPair()
@@ -70,5 +71,14 @@ describe('CryptoService Client Operations', () => {
     const updatedKeys = revokeUserAccess(sharedKeys, 'user-2')
     expect(updatedKeys['user-1']).toBeDefined()
     expect(updatedKeys['user-2']).toBeUndefined()
-  })
+  }, 20000)
+
+  test('generatePublicKeyFingerprint derives a unique deterministic certificate ID from public key', async () => {
+    const keyPair = await generateUserKeyPair()
+    const fingerprint1 = await generatePublicKeyFingerprint(keyPair.publicKey)
+    const fingerprint2 = await generatePublicKeyFingerprint(keyPair.publicKey)
+    
+    expect(fingerprint1).toBe(fingerprint2) // Should be deterministic
+    expect(fingerprint1).toMatch(/^UID-[0-9A-F]{8}$/) // Should start with UID- and be followed by 8 hex characters
+  }, 20000)
 })

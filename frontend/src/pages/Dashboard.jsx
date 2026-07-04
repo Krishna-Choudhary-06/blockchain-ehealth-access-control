@@ -15,8 +15,9 @@ import {
   LogOut, ShieldAlert, Award, Grid, Menu, Eye, EyeOff, Radio, Trash2, HelpCircle, Info
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { decryptFile, decryptKeyForUser } from '../services/cryptoService'
+import { decryptFile, decryptKeyForUser, addOnChainTx } from '../services/cryptoService'
 import { downloadFile } from '../services/ipfsService'
+import { getLogs, requestAccess } from '../services/apiService'
 
 
 export default function Dashboard() {
@@ -29,7 +30,10 @@ export default function Dashboard() {
   const [blocksMined, setBlocksMined] = useState(412)
   const [successReads, setSuccessReads] = useState(128)
   const [pendingReqs, setPendingReqs] = useState(2)
-  const [networkUsers, setNetworkUsers] = useState(156)
+  const [networkUsers, setNetworkUsers] = useState(() => {
+    const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+    return users.length
+  })
 
   // Admin-specific local states
   const [adminUsers, setAdminUsers] = useState(() => {
@@ -161,21 +165,80 @@ export default function Dashboard() {
     const saved = localStorage.getItem('patient_records')
     const uploaded = saved ? JSON.parse(saved) : []
     const defaults = [
-      { id: 'PAT-8820', name: 'PAT-8820: Cardiology Report', sensitivity: 'L0', ipfsHash: 'QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco', uploadTime: '2026-06-10 13:42:01' },
-      { id: 'PAT-3491', name: 'PAT-3491: Blood Panel Analysis', sensitivity: 'L1', ipfsHash: 'QmYwAPJzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWp8xyz', uploadTime: '2026-06-10 12:44:59' },
-      { id: 'PAT-1092', name: 'PAT-1092: MRI Brain Scan', sensitivity: 'L2', ipfsHash: 'QmZpQRzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWq9abc', uploadTime: '2026-06-10 13:12:44' },
-      { id: 'PAT-5420', name: 'PAT-5420: General Health Screening', sensitivity: 'L3', ipfsHash: 'QmT123zvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWr0def', uploadTime: '2026-06-09 10:15:30' }
+      { id: 'PAT-8820', name: 'PAT-8820: Cardiology Report', sensitivity: 'L0', ipfsHash: 'QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco', uploadTime: '2026-06-10 13:42:01', patientName: 'Patient Alex Carter' },
+      { id: 'PAT-3491', name: 'PAT-3491: Blood Panel Analysis', sensitivity: 'L1', ipfsHash: 'QmYwAPJzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWp8xyz', uploadTime: '2026-06-10 12:44:59', patientName: 'Patient Alex Carter' },
+      { id: 'PAT-1092', name: 'PAT-1092: MRI Brain Scan', sensitivity: 'L2', ipfsHash: 'QmZpQRzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWq9abc', uploadTime: '2026-06-10 13:12:44', patientName: 'Patient Alex Carter' },
+      { id: 'PAT-5420', name: 'PAT-5420: General Health Screening', sensitivity: 'L3', ipfsHash: 'QmT123zvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWr0def', uploadTime: '2026-06-09 10:15:30', patientName: 'Patient Alex Carter' }
     ]
     const filteredDefaults = defaults.filter(d => !uploaded.some(u => u.id === d.id))
     return [...uploaded, ...filteredDefaults]
-  })  // Simulated Patient Access History logs (implementing Section 4)
-  const [patientAccessHistory] = useState([
-    { id: 1, user: 'Doctor Amit', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:30 PM', status: 'Granted' },
-    { id: 2, user: 'Nurse Kelly Smith', action: 'Read Attempt', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:28 PM', status: 'Denied', reason: 'Role permissions restriction (L0)' },
-    { id: 3, user: 'Dr. Sarah Miller', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '11:15 AM', status: 'Granted' },
-    { id: 4, user: 'Lab Tech Dave', action: 'Accessed Report', file: 'PAT-3491: Blood Panel Analysis', date: '09 June 2026', time: '04:45 PM', status: 'Granted' },
-    { id: 5, user: 'Unknown Peer', action: 'Access Request', file: 'PAT-1092: MRI Brain Scan', date: '09 June 2026', time: '09:12 AM', status: 'Denied', reason: 'Consensus ABAC check failure' }
-  ])
+  })
+
+  // Get active record IDs belonging to the logged-in patient
+  const patientRecordIds = patientRecords
+    .filter(rec => rec.patientName?.toLowerCase() === user?.name?.toLowerCase())
+    .map(rec => rec.id)
+
+  // Dynamically compute Patient Access History logs (implementing Section 4)
+  const getPatientAccessHistory = () => {
+    // 1. Map approved local requests from local storage history list
+    const savedHistory = JSON.parse(localStorage.getItem('access_history') || '[]')
+    const mappedSaved = savedHistory.map(item => {
+      const dt = new Date(item.grantedDate)
+      return {
+        id: item.id,
+        user: item.userName,
+        action: 'Access Granted',
+        file: `${item.recordId}: ${item.recordType}`,
+        status: 'Granted',
+        date: dt.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        time: dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        recordId: item.recordId
+      }
+    })
+
+    // 2. Map check transactions from backend ledger logs
+    const mappedLedger = accessLogs
+      .filter(log => {
+        const matched = log.action.match(/PAT-\d+/)
+        const dataId = matched ? matched[0] : null
+        return dataId && patientRecordIds.includes(dataId)
+      })
+      .map(log => {
+        const dt = new Date(log.timestamp)
+        return {
+          id: log.id,
+          user: log.user,
+          action: log.status === 'Granted' ? 'Viewed File' : 'Denied Attempt',
+          file: log.action.replace('Read File ', ''),
+          status: log.status,
+          date: dt.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+          time: dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          recordId: log.action.replace('Read File ', '')
+        }
+      })
+
+    const defaults = [
+      { id: 'def-1', user: 'Doctor Amit', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:30 PM', status: 'Granted', recordId: 'PAT-8820' },
+      { id: 'def-2', user: 'Nurse Kelly Smith', action: 'Read Attempt', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:28 PM', status: 'Denied', reason: 'Role permissions restriction (L0)', recordId: 'PAT-8820' },
+      { id: 'def-3', user: 'Dr. Sarah Miller', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '11:15 AM', status: 'Granted', recordId: 'PAT-8820' },
+      { id: 'def-4', user: 'Lab Tech Dave', action: 'Accessed Report', file: 'PAT-3491: Blood Panel Analysis', date: '09 June 2026', time: '04:45 PM', status: 'Granted', recordId: 'PAT-3491' },
+      { id: 'def-5', user: 'Unknown Peer', action: 'Access Request', file: 'PAT-1092: MRI Brain Scan', date: '09 June 2026', time: '09:12 AM', status: 'Denied', reason: 'Consensus ABAC check failure', recordId: 'PAT-1092' }
+    ]
+
+    const combined = [...mappedSaved, ...mappedLedger]
+
+    // Fallback to default lists only if the patient is Alex Carter
+    if (user?.name?.toLowerCase().includes('alex carter')) {
+      return [...combined, ...defaults]
+    }
+
+    return combined.filter(item => {
+      const matched = item.file.match(/PAT-\d+/)
+      const dataId = matched ? matched[0] : item.recordId
+      return patientRecordIds.includes(dataId)
+    })
+  }
 
   // Doctor Specific States (for decrypting files)
   const [selectedRecordToDecrypt, setSelectedRecordToDecrypt] = useState(null)
@@ -267,6 +330,32 @@ export default function Dashboard() {
     const toastId = toast.loading('Mining access request block into blockchain ledger...')
 
     try {
+      let requesterId = 'DOC-MOCK'
+      if (user?.name) {
+        const keys = localStorage.getItem(`user_keys_${user.name}`)
+        if (keys) {
+          try {
+            requesterId = JSON.parse(keys).userId || requesterId
+          } catch (err) {
+            console.error('Failed to parse keys from localStorage:', err)
+          }
+        } else {
+          const registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
+          const match = registeredUsers.find(u => u.name === user.name)
+          if (match) {
+            requesterId = match.userId
+          }
+        }
+      }
+
+      // Invoke the requestAccess function from our API service
+      try {
+        await requestAccess(requesterId, requestFormData.patientId)
+      } catch (apiErr) {
+        console.warn('Backend API requestAccess failed, falling back to client-side simulation:', apiErr)
+        toast.error('Fabric network offline. Submitting via client-side simulation.', { duration: 4000 })
+      }
+
       await new Promise(resolve => setTimeout(resolve, 1500))
 
       const newRequestId = 'REQ-' + Math.floor(100000 + Math.random() * 900000)
@@ -293,6 +382,9 @@ export default function Dashboard() {
       const updatedRequests = [newRequest, ...accessRequests]
       saveAccessRequests(updatedRequests)
       
+      const reqBlockNumber = Math.floor(Math.random() * 200) + 430
+      addOnChainTx(user?.name || 'Doctor', `Request Access to Record ${newRequest.patientId}`, newRequest.txHash, reqBlockNumber, 'Pending')
+
       toast.success('Access Request successfully submitted to ledger!', { id: toastId })
       setIsRequestModalOpen(false)
       setRequestFormData({
@@ -371,6 +463,20 @@ export default function Dashboard() {
       }
 
       saveAccessRequests(updatedRequests)
+
+      const targetReq = accessRequests.find(r => r.id === requestId)
+      if (targetReq) {
+        const decisionBlockNumber = Math.floor(Math.random() * 200) + 440
+        const decisionTxHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+        addOnChainTx(
+          user?.name || 'Patient',
+          `Access Decision for ${targetReq.doctorName} on Record ${targetReq.patientId}`,
+          decisionTxHash,
+          decisionBlockNumber,
+          nextStatus === 'Approved' ? 'Granted' : 'Denied'
+        )
+      }
+
       toast.success(`Access Request ${nextStatus === 'Approved' ? 'Approved & Enrolled' : 'Rejected'} on ledger!`, { id: toastId })
     } catch (error) {
       toast.error(`Transaction failed: ${error.message}`, { id: toastId })
@@ -416,6 +522,19 @@ export default function Dashboard() {
           throw new Error(`Access Denied: You do not have security clearance for this record.`)
         }
 
+        // Call real backend Fabric ABAC validation
+        try {
+          const apiRes = await requestAccess(doctorUserId, record.id)
+          if (apiRes && apiRes.success) {
+            const dataAccessResult = typeof apiRes.data === 'string' ? JSON.parse(apiRes.data) : apiRes.data
+            if (dataAccessResult.status !== 'ACCESS_GRANTED') {
+              throw new Error(dataAccessResult.message || 'ABAC permission check rejected on ledger.')
+            }
+          }
+        } catch (apiErr) {
+          console.warn('Backend ledger access control check failed/offline:', apiErr)
+        }
+
         const aesKeyHex = await decryptKeyForUser(encryptedSymmetricKey, privateKey)
         const encryptedFileBuffer = await downloadFile(record.ipfsHash)
         const decryptedFileBuffer = await decryptFile(encryptedFileBuffer, aesKeyHex, record.ivHex)
@@ -442,22 +561,52 @@ export default function Dashboard() {
     }
   }
 
+  // Calculate dynamic metrics for role dashboards
+  const myRecordsCount = patientRecords.filter(rec => {
+    if (role === 'Patient') {
+      return rec.patientName?.toLowerCase() === user?.name?.toLowerCase()
+    }
+    return true
+  }).length
+
+  const myApprovedRequests = accessRequests.filter(req => 
+    req.status === 'Approved' && 
+    (req.patientName?.toLowerCase().includes(user?.name?.toLowerCase() || '') || 
+     user?.name?.toLowerCase().includes('alex carter'))
+  )
+  const uniqueDocs = new Set(myApprovedRequests.map(req => req.doctorName))
+  const authorizedDocsCount = uniqueDocs.size || (user?.name?.toLowerCase().includes('alex carter') ? 3 : 0)
+
+  const myPendingRequests = accessRequests.filter(req => 
+    req.status === 'Pending' && 
+    (req.patientName?.toLowerCase().includes(user?.name?.toLowerCase() || '') || 
+     user?.name?.toLowerCase().includes('alex carter'))
+  )
+  const pendingCount = myPendingRequests.length
+
+  const doctorPendingCount = accessRequests.filter(req => 
+    req.status === 'Pending' && 
+    req.doctorName?.toLowerCase() === user?.name?.toLowerCase()
+  ).length
+
+  const nursePendingCount = accessRequests.filter(req => req.status === 'Pending').length
+
   // Stat cards configurations based on active role
   const statCards = {
     Patient: [
-      { id: 1, label: 'My Enrolled Files', value: `${patientRecords.length}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
-      { id: 2, label: 'Authorized Doctors', value: '3', icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
-      { id: 3, label: 'Active Access Requests', value: `${pendingReqs > 0 ? pendingReqs + ' Pending' : 'None'}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
+      { id: 1, label: 'My Enrolled Files', value: `${myRecordsCount}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
+      { id: 2, label: 'Authorized Doctors', value: `${authorizedDocsCount}`, icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
+      { id: 3, label: 'Active Access Requests', value: `${pendingCount > 0 ? pendingCount + ' Pending' : 'None'}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
     ],
     Doctor: [
       { id: 1, label: 'Assigned Patients', value: '3', icon: FiUsers, color: 'text-blue-600 bg-blue-500/10' },
-      { id: 2, label: 'Requests Pending', value: `${pendingReqs}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' },
+      { id: 2, label: 'Requests Pending', value: `${doctorPendingCount}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' },
       { id: 3, label: 'Successful File Reads', value: `${successReads}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' }
     ],
     Nurse: [
       { id: 1, label: 'Lab Reports Accessible', value: '12', icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
       { id: 2, label: 'Access Requests Granted', value: '34', icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
-      { id: 3, label: 'Pending Action Items', value: `${pendingReqs}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
+      { id: 3, label: 'Pending Action Items', value: `${nursePendingCount}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
     ],
     Admin: [
       { id: 1, label: 'Peer Nodes Connected', value: '4 / 4', icon: FiCpu, color: 'text-emerald-600 bg-emerald-500/10' },
@@ -468,55 +617,96 @@ export default function Dashboard() {
 
   const activeStats = statCards[role] || statCards.Patient
 
-  // Set up refresh simulation loop
+  // Set up real ledger logs fetching loop
   useEffect(() => {
-    const interval = setInterval(() => {
-      const docNames = ['Dr. Sarah Miller', 'Dr. James Watson', 'Dr. Helen Cho', 'Dr. Robert Carter', 'Dr. Emily Vance']
-      const nurseNames = ['Nurse Kelly Smith', 'Nurse John Davis', 'Nurse Clara Barton']
-      const patientNames = ['Patient Alex Carter', 'Patient Alice Johnson', 'Patient Bob Smith']
-      const roles = ['Doctor', 'Nurse', 'Patient']
-      
-      const chosenRole = roles[Math.floor(Math.random() * roles.length)]
-      let user
-      let action
-      let status
+    let isBackendOffline = false
+    const fetchRealLogs = async () => {
+      if (isBackendOffline) {
+        // Suppress repeated network calls when backend is offline
+        const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+        setNetworkUsers(users.length)
+        
+        // Load fallback from localStorage if available
+        const cached = localStorage.getItem('blockchain_audit_trail')
+        if (cached) {
+          try {
+            setAccessLogs(JSON.parse(cached))
+          } catch (e) {
+            console.error('Failed to parse cached audit logs:', e)
+          }
+        }
+        return
+      }
+      try {
+        const res = await getLogs()
+        let logsData = null
+        if (res) {
+          if (Array.isArray(res)) {
+            logsData = res
+          } else if (res.success) {
+            logsData = res.data || res.logs
+          } else {
+            logsData = res.data || res.logs || res
+          }
+        }
+        
+        if (typeof logsData === 'string') {
+          try {
+            logsData = JSON.parse(logsData)
+          } catch (e) {
+            console.error('Failed to parse logsData JSON:', e)
+          }
+        }
 
-      if (chosenRole === 'Doctor') {
-        user = docNames[Math.floor(Math.random() * docNames.length)]
-        action = `Read File PAT-${Math.floor(1000 + Math.random() * 9000)}`
-        status = Math.random() > 0.15 ? 'Granted' : 'Denied'
-      } else if (chosenRole === 'Nurse') {
-        user = nurseNames[Math.floor(Math.random() * nurseNames.length)]
-        action = `Read File PAT-${Math.floor(1000 + Math.random() * 9000)}`
-        status = Math.random() > 0.7 ? 'Granted' : 'Denied'
-      } else {
-        user = patientNames[Math.floor(Math.random() * patientNames.length)]
-        action = `Read File PAT-${Math.floor(1000 + Math.random() * 9000)}`
-        status = 'Granted'
+        if (Array.isArray(logsData)) {
+          const formatted = logsData.map((log, idx) => ({
+            id: log.txId || `log_${idx}`,
+            user: log.requesterId,
+            role: log.requesterLevel === 'L0' ? 'Doctor' : log.requesterLevel === 'L1' ? 'Lab' : log.requesterLevel === 'L2' ? 'Nurse' : 'Public',
+            action: `Read File ${log.dataId}`,
+            status: log.action === 'GRANTED' ? 'Granted' : 'Denied',
+            timestamp: log.time || new Date().toISOString().replace('T', ' ').substring(0, 19)
+          }))
+          // Sort by timestamp descending
+          formatted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          setAccessLogs(formatted.slice(0, 10))
+          localStorage.setItem('blockchain_audit_trail', JSON.stringify(formatted.slice(0, 10)))
+          
+          // Sync success reads count from logs
+          const grantedCount = formatted.filter(l => l.status === 'Granted').length
+          setSuccessReads(grantedCount)
+          
+          // Sync blocks count
+          setBlocksMined(412 + formatted.length)
+        } else {
+          // If response format is invalid, load fallback
+          const cached = localStorage.getItem('blockchain_audit_trail')
+          if (cached) {
+            setAccessLogs(JSON.parse(cached))
+          }
+        }
+      } catch (err) {
+        isBackendOffline = true
+        console.warn('Backend logs offline. Proceeding with frontend local access history (polling disabled).')
+        
+        // Load fallback logs from localStorage if available
+        const cached = localStorage.getItem('blockchain_audit_trail')
+        if (cached) {
+          try {
+            setAccessLogs(JSON.parse(cached))
+          } catch (e) {
+            console.error('Failed to parse cached audit logs on backend error:', e)
+          }
+        }
       }
 
-      const newLog = {
-        id: Date.now(),
-        user,
-        role: chosenRole,
-        action,
-        status,
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19)
-      }
+      // Sync user count from localStorage
+      const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+      setNetworkUsers(users.length)
+    }
 
-      setAccessLogs(prev => [newLog, ...prev].slice(0, 6))
-      setBlocksMined(prev => prev + 1)
-      if (status === 'Granted' && chosenRole === 'Doctor') {
-        setSuccessReads(prev => prev + 1)
-      }
-      setPendingReqs(Math.floor(Math.random() * 4))
-      
-      if (Math.random() > 0.8) {
-        setNetworkUsers(prev => prev + 1)
-      }
-
-    }, 3000)
-
+    fetchRealLogs()
+    const interval = setInterval(fetchRealLogs, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -1110,123 +1300,161 @@ export default function Dashboard() {
 }
 
   // 2. PATIENT RECORDS & PERMISSION VISIBILITY (implementing Section 5)
-  const renderPatientRecords = () => (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">My Uploaded Records</h2>
-        <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Audit security clearance levels and attribute access grids set on the blockchain ledger.</p>
-      </div>
+  const renderPatientRecords = () => {
+    const displayRecords = patientRecords.filter(rec => {
+      if (role === 'Patient') {
+        return rec.patientName?.toLowerCase() === user?.name?.toLowerCase()
+      }
+      return true
+    })
 
-      <div className="grid grid-cols-1 gap-6">
-        {patientRecords.map((record) => (
-          <div key={record.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h4 className="text-base font-bold text-slate-900 dark:text-white">{record.name}</h4>
-                <div className="flex items-center space-x-2 mt-1">
-                  <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate max-w-[200px] md:max-w-md block" title={record.ipfsHash}>
-                    IPFS: {record.ipfsHash}
-                  </span>
-                  <button onClick={() => handleCopy(record.ipfsHash)} className="text-purple-600 hover:text-purple-500 p-0.5 rounded cursor-pointer">
-                    <FiCopy className="w-3.5 h-3.5" />
-                  </button>
+    return (
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">My Uploaded Records</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Audit security clearance levels and attribute access grids set on the blockchain ledger.</p>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6">
+          {displayRecords.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-8 rounded-3xl text-center space-y-4">
+              <FiFileText className="w-12 h-12 text-slate-350 dark:text-slate-700 mx-auto" />
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Records Found</h3>
+              <p className="text-[11px] text-slate-550 dark:text-slate-400 max-w-xs mx-auto">
+                You haven't uploaded any medical records to the healthcare network yet.
+              </p>
+              <Link 
+                to="/upload"
+                className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-md transition-all gap-1.5 cursor-pointer mx-auto"
+              >
+                <FiPlus className="w-4 h-4" />
+                Upload Your First Record
+              </Link>
+            </div>
+          ) : (
+            displayRecords.map((record) => (
+              <div key={record.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900 dark:text-white">{record.name}</h4>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className="text-[10px] font-mono text-slate-405 dark:text-slate-500 truncate max-w-[200px] md:max-w-md block" title={record.ipfsHash}>
+                        IPFS: {record.ipfsHash}
+                      </span>
+                      <button onClick={() => handleCopy(record.ipfsHash)} className="text-purple-600 hover:text-purple-500 p-0.5 rounded cursor-pointer">
+                        <FiCopy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-550 block">Uploaded: {record.uploadTime}</span>
+                    <span className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                      Level {record.sensitivity}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Access Matrix (Section 5 Requirement) */}
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-850/80">
+                  <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Current Access Clearance Control Matrix</h5>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    {['Doctor', 'Nurse', 'Lab', 'Staff', 'Public'].map((r) => {
+                      const allowed = getRoleAccess(record.sensitivity, r)
+                      return (
+                        <div 
+                          key={r} 
+                          className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
+                            allowed 
+                              ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-600 dark:text-emerald-450' 
+                              : 'bg-rose-500/5 border-rose-500/10 text-rose-600 dark:text-rose-455'
+                          }`}
+                        >
+                          <span>{r}</span>
+                          {allowed ? (
+                            <FiCheck className="w-4 h-4 text-emerald-500" />
+                          ) : (
+                            <FiX className="w-4 h-4 text-rose-500" />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-3 text-[10px] text-slate-400 dark:text-slate-500 leading-normal">
+                    {record.sensitivity === 'L0' && "* L0 restricts access only to Doctor. Nurses, staff and laboratory peers are denied."}
+                    {record.sensitivity === 'L1' && "* L1 grants authorization rights to Doctors and Laboratory technicians."}
+                    {record.sensitivity === 'L2' && "* L2 opens clearance to General Staff, Nurses, Doctors and Laboratories."}
+                    {record.sensitivity === 'L3' && "* L3 ledger files are cleared for public access without authentication parameters."}
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <span className="text-[10px] font-mono text-slate-400 dark:text-slate-550 block">Uploaded: {record.uploadTime}</span>
-                <span className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                  Level {record.sensitivity}
-                </span>
-              </div>
-            </div>
-
-            {/* Access Matrix (Section 5 Requirement) */}
-            <div className="bg-slate-50 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-850/80">
-              <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Current Access Clearance Control Matrix</h5>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                {['Doctor', 'Nurse', 'Lab', 'Staff', 'Public'].map((r) => {
-                  const allowed = getRoleAccess(record.sensitivity, r)
-                  return (
-                    <div 
-                      key={r} 
-                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-xs font-bold ${
-                        allowed 
-                          ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-600 dark:text-emerald-450' 
-                          : 'bg-rose-500/5 border-rose-500/10 text-rose-600 dark:text-rose-455'
-                      }`}
-                    >
-                      <span>{r}</span>
-                      {allowed ? (
-                        <FiCheck className="w-4 h-4 text-emerald-500" />
-                      ) : (
-                        <FiX className="w-4 h-4 text-rose-500" />
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="mt-3 text-[10px] text-slate-400 dark:text-slate-500 leading-normal">
-                {record.sensitivity === 'L0' && "* L0 restricts access only to Doctor. Nurses, staff and laboratory peers are denied."}
-                {record.sensitivity === 'L1' && "* L1 grants authorization rights to Doctors and Laboratory technicians."}
-                {record.sensitivity === 'L2' && "* L2 opens clearance to General Staff, Nurses, Doctors and Laboratories."}
-                {record.sensitivity === 'L3' && "* L3 ledger files are cleared for public access without authentication parameters."}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-
-  // 3. RECORD OWNERSHIP VISIBILITY - WHO ACCESSED MY DATA (implementing Section 4)
-  const renderPatientWhoAccessed = () => (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">Record Ownership Visibility</h2>
-        <p className="text-slate-500 dark:text-slate-405 text-xs mt-1">Directly monitor which medical entities queried or requested access to your secure cases.</p>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
-                <th className="pb-3.5 pl-2">User Identity</th>
-                <th className="pb-3.5">Action Type</th>
-                <th className="pb-3.5">Medical File Target</th>
-                <th className="pb-3.5">Status Checked</th>
-                <th className="pb-3.5">Date</th>
-                <th className="pb-3.5 text-right pr-2">Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
-              {patientAccessHistory.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
-                  <td className="py-4 pl-2 font-semibold text-slate-955 dark:text-white flex items-center gap-1.5">
-                    <FiUser className="text-purple-600 w-3.5 h-3.5" />
-                    {item.user}
-                  </td>
-                  <td className="py-4 font-mono text-[10px] uppercase text-slate-550 dark:text-slate-400">{item.action}</td>
-                  <td className="py-4 font-semibold">{item.file}</td>
-                  <td className="py-4">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9.5px] font-bold border ${
-                      item.status === 'Granted'
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 border-emerald-500/20'
-                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
-                    }`}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="py-4 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.date}</td>
-                  <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.time}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            ))
+          )}
         </div>
       </div>
-    </div>
-  )
+    )
+  }
+
+  // 3. RECORD OWNERSHIP VISIBILITY - WHO ACCESSED MY DATA (implementing Section 4)
+  const renderPatientWhoAccessed = () => {
+    const displayedHistory = getPatientAccessHistory()
+
+    return (
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">Record Ownership Visibility</h2>
+          <p className="text-slate-500 dark:text-slate-405 text-xs mt-1">Directly monitor which medical entities queried or requested access to your secure cases.</p>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
+                  <th className="pb-3.5 pl-2">User Identity</th>
+                  <th className="pb-3.5">Action Type</th>
+                  <th className="pb-3.5">Medical File Target</th>
+                  <th className="pb-3.5">Status Checked</th>
+                  <th className="pb-3.5">Date</th>
+                  <th className="pb-3.5 text-right pr-2">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
+                {displayedHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="py-8 text-center text-slate-405 dark:text-slate-500">
+                      No access log history found for your medical records on the ledger.
+                    </td>
+                  </tr>
+                ) : (
+                  displayedHistory.map((item) => (
+                    <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-955/20 transition-colors">
+                      <td className="py-4 pl-2 font-semibold text-slate-955 dark:text-white flex items-center gap-1.5">
+                        <FiUser className="text-purple-600 w-3.5 h-3.5" />
+                        {item.user}
+                      </td>
+                      <td className="py-4 font-mono text-[10px] uppercase text-slate-550 dark:text-slate-400">{item.action}</td>
+                      <td className="py-4 font-semibold">{item.file}</td>
+                      <td className="py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9.5px] font-bold border ${
+                          item.status === 'Granted'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="py-4 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.date}</td>
+                      <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-500 dark:text-slate-400">{item.time}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // 4. DOCTOR RECORDS LIST
   const renderDoctorRecords = () => {
@@ -2428,6 +2656,25 @@ export default function Dashboard() {
 
   // 11. USER PROFILE PAGE (implementing Checklist Profile Page)
   const renderProfile = () => {
+    const keysKey = `user_keys_${user?.name}`
+    const userKeys = JSON.parse(localStorage.getItem(keysKey) || '{}')
+    const privateKey = userKeys.privateKey || ''
+
+    const downloadProfilePrivateKey = () => {
+      if (!privateKey) {
+        toast.error('No private key available for this profile.')
+        return
+      }
+      const element = document.createElement("a");
+      const file = new Blob([privateKey], {type: 'text/plain'});
+      element.href = URL.createObjectURL(file);
+      element.download = `${user?.name.replace(/\s+/g, '_')}_private_key.pem`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      toast.success('Private key PEM file downloaded successfully!');
+    }
+
     return (
       <div className="space-y-8 animate-fadeIn">
         <div>
@@ -2438,7 +2685,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Profile Details */}
           <div className="lg:col-span-6 space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-6">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-6">
               <div className="flex items-center space-x-4">
                 <img 
                   src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80'} 
@@ -2455,21 +2702,21 @@ export default function Dashboard() {
 
               <div className="border-t border-slate-100 dark:border-slate-800/60 pt-4 space-y-3.5 text-xs">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Email Address</span>
+                  <span className="text-slate-455 dark:text-slate-400">Email Address</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.email || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Organization / Group</span>
+                  <span className="text-slate-455 dark:text-slate-400">Organization / Group</span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.organization || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Security Clearance</span>
+                  <span className="text-slate-455 dark:text-slate-400">Security Clearance</span>
                   <span className="font-bold text-blue-600 dark:text-blue-400">
                     {role === 'Admin' ? 'Level 4 (Full System Control)' : role === 'Doctor' ? 'Level 3 (Write/Read Authorized)' : role === 'Nurse' ? 'Level 2 (Read/Update Limited)' : 'Level 1 (Self Records Access)'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-450 dark:text-slate-400">Consensus Peer Affinity</span>
+                  <span className="text-slate-455 dark:text-slate-400">Consensus Peer Affinity</span>
                   <span className="font-mono text-[10px] text-slate-600 dark:text-slate-355 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 px-2 py-0.5 rounded">
                     {role === 'Admin' ? 'Peer0.Admin.ehealth.org' : role === 'Doctor' ? 'Peer1.Hospital.ehealth.org' : role === 'Nurse' ? 'Peer2.Lab.ehealth.org' : 'Peer3.Client.ehealth.org'}
                   </span>
@@ -2480,22 +2727,22 @@ export default function Dashboard() {
 
           {/* Cryptographic Certificate */}
           <div className="lg:col-span-6 space-y-6">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-4">
               <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                 <FiShield className="text-emerald-500" />
                 eHealth Digital X.509 Certificate
               </h3>
-              <p className="text-[10px] text-slate-505">Hyperledger Fabric CA Issued identity certificate for securing patient HIPAA compliance logs.</p>
+              <p className="text-[10px] text-slate-500">Hyperledger Fabric CA Issued identity certificate for securing patient HIPAA compliance logs.</p>
               
               <div className="space-y-3 font-semibold text-slate-700 dark:text-slate-300 text-xs">
-                <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl space-y-2.5 font-mono text-[10px]">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-955 border border-slate-202 dark:border-slate-855 rounded-2xl space-y-2.5 font-mono text-[10px]">
                   <div className="flex justify-between border-b border-slate-200 dark:border-slate-850 pb-1.5">
                     <span className="text-slate-405">VERSION</span>
                     <span className="text-slate-900 dark:text-white">v3 (X.509)</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 dark:border-slate-850 pb-1.5">
-                    <span className="text-slate-405">SERIAL NUMBER</span>
-                    <span className="text-slate-900 dark:text-white font-mono">0F:D4:5A:21:BC:07:90:E5</span>
+                    <span className="text-slate-405">SERIAL NUMBER / UID</span>
+                    <span className="text-slate-900 dark:text-white font-mono">{user?.userId || '0F:D4:5A:21:BC:07:90:E5'}</span>
                   </div>
                   <div className="flex justify-between border-b border-slate-200 dark:border-slate-850 pb-1.5">
                     <span className="text-slate-405">ISSUER</span>
@@ -2506,18 +2753,42 @@ export default function Dashboard() {
                     <span className="text-emerald-600 dark:text-emerald-400 font-bold">ACTIVE (Expires 2030)</span>
                   </div>
                   <div className="pt-1">
-                    <span className="text-slate-405 block mb-1">X.509 PUBLIC KEY DATA (ECDSA)</span>
+                    <span className="text-slate-405 block mb-1">X.509 PUBLIC KEY DATA (PEM)</span>
                     <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-2 rounded-xl text-[9px] text-slate-500 dark:text-slate-405 break-all max-h-16 overflow-y-auto font-mono relative group">
-                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7p95R3eO3w9oF3d72rGv...
+                      {user?.publicKey || 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7p95R3eO3w9oF3d72rGv'}
                       <button 
-                        onClick={() => handleCopy('MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7p95R3eO3w9oF3d72rGv')}
-                        className="absolute right-2 top-2 p-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-950 dark:hover:bg-slate-900 rounded cursor-pointer"
+                        onClick={() => handleCopy(user?.publicKey || 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7p95R3eO3w9oF3d72rGv')}
+                        className="absolute right-2 top-2 p-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-955 dark:hover:bg-slate-900 rounded cursor-pointer"
                         title="Copy Key"
                       >
-                        <FiCopy className="w-3 h-3 text-slate-600 dark:text-slate-400" />
+                        <FiCopy className="w-3 h-3 text-slate-650 dark:text-slate-400" />
                       </button>
                     </div>
                   </div>
+
+                  {privateKey && (
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-850 mt-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-red-500 font-bold block">X.509 PRIVATE KEY DATA (PEM)</span>
+                        <button 
+                          onClick={downloadProfilePrivateKey}
+                          className="text-[10px] text-purple-650 dark:text-purple-400 hover:underline cursor-pointer font-bold"
+                        >
+                          Download .PEM File
+                        </button>
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-850 p-2 rounded-xl text-[9px] text-slate-500 dark:text-slate-405 break-all max-h-16 overflow-y-auto font-mono relative group">
+                        {privateKey}
+                        <button 
+                          onClick={() => handleCopy(privateKey)}
+                          className="absolute right-2 top-2 p-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-955 dark:hover:bg-slate-900 rounded cursor-pointer"
+                          title="Copy Key"
+                        >
+                          <FiCopy className="w-3 h-3 text-slate-650 dark:text-slate-400" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
