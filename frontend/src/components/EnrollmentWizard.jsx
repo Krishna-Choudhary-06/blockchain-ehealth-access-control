@@ -7,7 +7,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, ShieldAlert, 
   Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X 
 } from 'lucide-react'
-import { generateUserKeyPair, getDelay, generatePublicKeyFingerprint } from '../services/cryptoService'
+import { generateUserKeyPair, getDelay, generatePublicKeyFingerprint, addOnChainTx } from '../services/cryptoService'
 import { registerUser, assignLevel } from '../services/apiService'
 import StepProgress from './StepProgress'
 import RoleSelector from './RoleSelector'
@@ -37,6 +37,8 @@ export default function EnrollmentWizard() {
       name: '',
       email: '',
       phone: '',
+      password: '',
+      avatar: '',
       organization: '',
       department: '',
       specialization: '',
@@ -76,7 +78,7 @@ export default function EnrollmentWizard() {
 
     if (step === 2) {
       // Validate Step 2 fields based on role
-      const fieldsToValidate = ['name', 'email', 'phone']
+      const fieldsToValidate = ['name', 'email', 'phone', 'password']
       if (formData.role === 'Patient') {
         fieldsToValidate.push('dob', 'gender', 'bloodGroup')
       }
@@ -106,6 +108,24 @@ export default function EnrollmentWizard() {
     setCopiedKey(true)
     toast.success('Public key copied to clipboard!')
     setTimeout(() => setCopiedKey(false), 2000)
+  }
+
+  const handleCopyPrivateKey = (text) => {
+    navigator.clipboard.writeText(text)
+    setCopiedPrivateKey(true)
+    toast.success('Private key copied to clipboard! Keep this extremely secure.')
+    setTimeout(() => setCopiedPrivateKey(false), 2000)
+  }
+
+  const handleDownloadPrivateKey = (privateKeyPem, userName) => {
+    const element = document.createElement("a");
+    const file = new Blob([privateKeyPem], {type: 'text/plain'});
+    element.href = URL.createObjectURL(file);
+    element.download = `${userName.replace(/\s+/g, '_')}_private_key.pem`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+    toast.success('Private key PEM file downloaded!');
   }
 
   const handleEnrollIdentity = async () => {
@@ -148,7 +168,7 @@ export default function EnrollmentWizard() {
       // Assign privacy level
       let securityLvl = 'L1'
       if (formData.role === 'Admin') securityLvl = 'L3'
-      else if (formData.role === 'Doctor') securityLvl = 'L2'
+      else if (formData.role === 'Doctor') securityLvl = 'L3'
       else if (formData.role === 'Nurse') securityLvl = 'L2'
       if (formData.securityLevel) securityLvl = 'L' + formData.securityLevel
 
@@ -173,7 +193,9 @@ export default function EnrollmentWizard() {
         phone: formData.phone,
         organization: finalOrg,
         publicKey: keyPair.publicKey,
-        privateKey: keyPair.privateKey
+        privateKey: keyPair.privateKey,
+        password: formData.password,
+        avatar: formData.avatar || ''
       }))
 
       // Save to registered users list
@@ -183,7 +205,8 @@ export default function EnrollmentWizard() {
         name: formData.name,
         role: formData.role,
         organization: finalOrg,
-        publicKey: keyPair.publicKey
+        publicKey: keyPair.publicKey,
+        avatar: formData.avatar || ''
       })
       localStorage.setItem('registered_users', JSON.stringify(existingUsers))
 
@@ -196,10 +219,12 @@ export default function EnrollmentWizard() {
         role: formData.role,
         organization: finalOrg,
         identityId: identityId,
-        publicKey: keyPair.publicKey
+        publicKey: keyPair.publicKey,
+        privateKey: keyPair.privateKey
       }
 
       setTxDetails(transactionData)
+      addOnChainTx(formData.name, `Register User Identity (Role: ${formData.role})`, mockTxHash, transactionData.blockNumber, 'Granted')
       setLoading(false)
       toast.success('Identity node enrolled and committed to ledger!', { id: toastId })
     } catch (error) {
@@ -270,6 +295,8 @@ export default function EnrollmentWizard() {
                     errors={errors} 
                     role={formData.role} 
                     step={step} 
+                    setValue={setValue}
+                    watch={watch}
                   />
                 </form>
               </motion.div>
@@ -512,16 +539,49 @@ export default function EnrollmentWizard() {
                       <Key className="w-3.5 h-3.5" /> Generated RSA-OAEP Public Key
                     </span>
                     <button
+                      type="button"
                       onClick={() => handleCopyKey(txDetails.publicKey)}
                       className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      {copiedKey ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      Copy PEM
+                      {copiedKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                      Copy Public PEM
                     </button>
                   </div>
-                  <pre className="p-3 bg-slate-950 text-slate-400 rounded-xl font-mono text-[8px] leading-normal overflow-y-auto max-h-[100px] border border-slate-900">
+                  <pre className="p-3 bg-slate-950 text-slate-400 rounded-xl font-mono text-[8px] leading-normal overflow-y-auto max-h-[80px] border border-slate-900">
                     {txDetails.publicKey}
                   </pre>
+                </div>
+
+                {/* Private Key Display */}
+                <div className="border border-red-500/10 bg-red-500/5 rounded-2xl p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] uppercase tracking-wider text-red-500 font-bold flex items-center gap-1">
+                      <Shield className="w-3.5 h-3.5" /> Generated RSA-OAEP Private Key (Keep Secret!)
+                    </span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPrivateKey(txDetails.privateKey)}
+                        className="text-[10px] text-red-650 dark:text-red-400 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        {copiedPrivateKey ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                        Copy Private PEM
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadPrivateKey(txDetails.privateKey, txDetails.name)}
+                        className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        Download .PEM File
+                      </button>
+                    </div>
+                  </div>
+                  <pre className="p-3 bg-slate-950 text-slate-400 rounded-xl font-mono text-[8px] leading-normal overflow-y-auto max-h-[85px] border border-slate-900">
+                    {txDetails.privateKey}
+                  </pre>
+                  <p className="text-[9px] text-red-600 dark:text-red-400 leading-normal font-semibold">
+                    ⚠️ You MUST download or copy this Private Key file now! You will need to upload/provide it to log in and sign transactions in the workspace.
+                  </p>
                 </div>
               </div>
 

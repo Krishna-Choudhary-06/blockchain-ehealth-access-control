@@ -20,6 +20,7 @@ export default function AuthenticationWizard({ onBackToSelection }) {
   const [verifiedUser, setVerifiedUser] = useState(null)
   const [justEnrolledData, setJustEnrolledData] = useState(null)
   const [stats, setStats] = useState({ identitiesCount: 142 })
+  const [enteredPassword, setEnteredPassword] = useState('')
 
   // Initialize checks for enrollment redirection & statistics
   useEffect(() => {
@@ -63,6 +64,7 @@ export default function AuthenticationWizard({ onBackToSelection }) {
   }
 
   const handleCredentialsSubmitted = async (data) => {
+    setEnteredPassword(data.password)
     // Transition to step 5: Blockchain access timeline check
     setStep(5)
   }
@@ -73,12 +75,15 @@ export default function AuthenticationWizard({ onBackToSelection }) {
       const identifier = verifiedUser.identityId || verifiedUser.email || `${verifiedUser.name.toLowerCase().replace(/\s+/g, '.')}@health.com`
       
       // Call mock login
-      const loggedIn = await login(identifier, 'password123', verifiedUser.role)
+      const loggedIn = await login(identifier, enteredPassword, verifiedUser.role)
+      if (!loggedIn) {
+        throw new Error('Invalid credentials')
+      }
       
       toast.success(`Welcome back, ${loggedIn.name}!`)
       navigate('/dashboard')
     } catch (error) {
-      toast.error('Blockchain validation failed: Session could not be created.')
+      toast.error(`Blockchain validation failed: ${error.message || 'Session could not be created.'}`)
       setStep(4) // Fallback to credentials screen
     }
   }

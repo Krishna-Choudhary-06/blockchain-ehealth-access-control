@@ -54,7 +54,7 @@ class DataAccess extends Contract {
         }
         const data = JSON.parse(dataBytes.toString());
 
-        const granted = acl.levelNum <= data.requiredLevelNum;
+        const granted = acl.levelNum >= data.requiredLevelNum;
 
         const log = {
             requesterId,

@@ -24,29 +24,50 @@ export default function Explorer() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
   // Simulated initial blocks
-  const [blocks, setBlocks] = useState([
-    { number: 412, hash: '0x3f9e8a71c50b6912384a56c7d8e9f2b1d3c4a5b6', txCount: 2, size: '2.4 KB', time: '12s ago', prevHash: '0x1a8f9c7b2d5e381049281a4b5d6e7f8a9b0c1d2e', merkleRoot: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f', validator: 'peer0.nit.ehealth.org' },
-    { number: 411, hash: '0x1a8f9c7b2d5e381049281a4b5d6e7f8a9b0c1d2e', txCount: 1, size: '1.2 KB', time: '15s ago', prevHash: '0x8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c', merkleRoot: '0x5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f7a8b9c0d1e2f3a4b', validator: 'peer1.hospital.ehealth.org' },
-    { number: 410, hash: '0x8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c', txCount: 3, size: '3.8 KB', time: '18s ago', prevHash: '0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e', merkleRoot: '0x3e4f5a6b7c8d9e0f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d', validator: 'peer2.labs.ehealth.org' },
-    { number: 409, hash: '0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e', txCount: 1, size: '1.1 KB', time: '21s ago', prevHash: '0x9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d', merkleRoot: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f', validator: 'peer0.nit.ehealth.org' },
-    { number: 408, hash: '0x9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d', txCount: 2, size: '2.5 KB', time: '24s ago', prevHash: '0x2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b', merkleRoot: '0x1c2d3e4f5a6b7c8d9e0f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', validator: 'peer3.client.ehealth.org' }
-  ])
+  const [blocks, setBlocks] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('explorer_blocks') || '[]')
+    const defaults = [
+      { number: 412, hash: '0x3f9e8a71c50b6912384a56c7d8e9f2b1d3c4a5b6', txCount: 2, size: '2.4 KB', time: '12s ago', prevHash: '0x1a8f9c7b2d5e381049281a4b5d6e7f8a9b0c1d2e', merkleRoot: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f', validator: 'peer0.nit.ehealth.org' },
+      { number: 411, hash: '0x1a8f9c7b2d5e381049281a4b5d6e7f8a9b0c1d2e', txCount: 1, size: '1.2 KB', time: '15s ago', prevHash: '0x8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c', merkleRoot: '0x5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f7a8b9c0d1e2f3a4b', validator: 'peer1.hospital.ehealth.org' },
+      { number: 410, hash: '0x8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c', txCount: 3, size: '3.8 KB', time: '18s ago', prevHash: '0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e', merkleRoot: '0x3e4f5a6b7c8d9e0f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d', validator: 'peer2.labs.ehealth.org' },
+      { number: 409, hash: '0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e', txCount: 1, size: '1.1 KB', time: '21s ago', prevHash: '0x9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d', merkleRoot: '0x7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f', validator: 'peer0.nit.ehealth.org' },
+      { number: 408, hash: '0x9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d', txCount: 2, size: '2.5 KB', time: '24s ago', prevHash: '0x2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b', merkleRoot: '0x1c2d3e4f5a6b7c8d9e0f7a8b9c0d1e2f3a4b5c6d7e8f9a0b', validator: 'peer3.client.ehealth.org' }
+    ]
+    return [...saved, ...defaults].slice(0, 10)
+  })
 
   // Simulated initial transactions
-  const [txs, setTxs] = useState([
-    { id: '0x9a8b7c6d5e4f3a2b', block: 412, sender: 'Dr. Sarah Miller', action: 'Doctor Viewed Record PAT-8820', status: 'Granted', time: '12:30:01 PM' },
-    { id: '0x1a2b3c4d5e6f7a8b', block: 412, sender: 'Patient Alice Johnson', action: 'Uploaded File PAT-8820', status: 'Granted', time: '12:29:45 PM' },
-    { id: '0x5e6f7a8b9c0d1e2f', block: 411, sender: 'Dr. James Watson', action: 'Doctor Viewed Record PAT-3491', status: 'Granted', time: '12:27:10 PM' },
-    { id: '0x3a4b5c6d7e8f9a0b', block: 410, sender: 'Nurse Kelly Smith', action: 'Nurse Tried Record PAT-8820', status: 'Denied', time: '12:25:34 PM' }
-  ])
+  const [txs, setTxs] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('explorer_txs') || '[]')
+    const defaults = [
+      { id: '0x9a8b7c6d5e4f3a2b', block: 412, sender: 'Dr. Sarah Miller', action: 'Doctor Viewed Record PAT-8820', status: 'Granted', time: '12:30:01 PM' },
+      { id: '0x1a2b3c4d5e6f7a8b', block: 412, sender: 'Patient Alice Johnson', action: 'Uploaded File PAT-8820', status: 'Granted', time: '12:29:45 PM' },
+      { id: '0x5e6f7a8b9c0d1e2f', block: 411, sender: 'Dr. James Watson', action: 'Doctor Viewed Record PAT-3491', status: 'Granted', time: '12:27:10 PM' },
+      { id: '0x3a4b5c6d7e8f9a0b', block: 410, sender: 'Nurse Kelly Smith', action: 'Nurse Tried Record PAT-8820', status: 'Denied', time: '12:25:34 PM' }
+    ]
+    return [...saved, ...defaults].slice(0, 12)
+  })
 
   // Simulated initial activity feed
-  const [feed, setFeed] = useState([
-    { id: 1, type: 'read_success', text: 'Dr. Sarah Miller successfully accessed file PAT-8820', time: '12s ago', role: 'Doctor' },
-    { id: 2, type: 'upload_success', text: 'Patient Alice Johnson uploaded case file PAT-8820', time: '13s ago', role: 'Patient' },
-    { id: 3, type: 'read_denied', text: 'Access Denied: Nurse Kelly Smith tried reading file PAT-8820', time: '18s ago', role: 'Nurse' },
-    { id: 4, type: 'register_success', text: 'New Doctor identity registered on Fabric ledger: Dr. Sarah Miller', time: '25s ago', role: 'Doctor' }
-  ])
+  const [feed, setFeed] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem('explorer_feeds') || '[]')
+    const defaults = [
+      { id: 1, type: 'read_success', text: 'Dr. Sarah Miller successfully accessed file PAT-8820', time: '12s ago', role: 'Doctor' },
+      { id: 2, type: 'upload_success', text: 'Patient Alice Johnson uploaded case file PAT-8820', time: '13s ago', role: 'Patient' },
+      { id: 3, type: 'read_denied', text: 'Access Denied: Nurse Kelly Smith tried reading file PAT-8820', time: '18s ago', role: 'Nurse' },
+      { id: 4, type: 'register_success', text: 'New Doctor identity registered on Fabric ledger: Dr. Sarah Miller', time: '25s ago', role: 'Doctor' }
+    ]
+    return [...saved, ...defaults].slice(0, 8)
+  })
+
+  useEffect(() => {
+    const savedBlocks = JSON.parse(localStorage.getItem('explorer_blocks') || '[]')
+    const savedTxs = JSON.parse(localStorage.getItem('explorer_txs') || '[]')
+    const maxSavedBlock = savedBlocks.reduce((max, b) => b.number > max ? b.number : max, 0)
+    const baseBlockHeight = maxSavedBlock > 412 ? maxSavedBlock : 412
+    setTotalBlocks(baseBlockHeight)
+    setTotalTxs(1286 + savedTxs.length)
+  }, [blocks])
 
   useEffect(() => {
     // Refresh interval: run every 3 seconds
@@ -79,7 +100,8 @@ export default function Explorer() {
       }
 
       // Increment stats
-      const nextBlockNumber = blocks[0].number + 1
+      const maxBlockNum = blocks.reduce((max, b) => b.number > max ? b.number : max, 412)
+      const nextBlockNumber = maxBlockNum + 1
       const nextTxCount = Math.floor(Math.random() * 2) + 1 // 1 or 2 txs in block
       setTotalBlocks(nextBlockNumber)
       setTotalTxs(prev => prev + nextTxCount)
