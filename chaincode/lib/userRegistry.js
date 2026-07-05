@@ -9,15 +9,14 @@ class UserRegistry extends Contract {
         try {
             const ts = ctx.stub.getTxTimestamp();
             if (ts && ts.seconds) {
-                const secs = ts.seconds.low !== undefined ? ts.seconds.low : parseInt(ts.seconds.toString());
+                const secs = ts.seconds.low !== undefined
+                    ? ts.seconds.low
+                    : parseInt(ts.seconds.toString());
                 return new Date(secs * 1000).toISOString();
-            } else if (ts && typeof ts.getSeconds === 'function') {
-                return new Date(ts.getSeconds() * 1000).toISOString();
-            } else {
-                return 'TxID-' + ctx.stub.getTxID();
             }
+            return new Date().toISOString();
         } catch(e) {
-            return 'TxID-' + ctx.stub.getTxID();
+            return new Date().toISOString();
         }
     }
 
