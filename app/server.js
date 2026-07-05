@@ -108,6 +108,10 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
 
         // Step 2: Upload encrypted file to IPFS
         const ipfsHash = await ipfsService.uploadFile(encryptedData);
+        console.log('=== UPLOAD DEBUG ===');
+        console.log('ipfsHash:', ipfsHash);
+        console.log('iv:', iv);
+        console.log('level:', level);
 
         // Step 3: Build broadcast header for authorized users
         //         Parse authorizedUsers from request body

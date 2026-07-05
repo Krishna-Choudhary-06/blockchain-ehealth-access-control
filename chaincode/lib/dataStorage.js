@@ -181,10 +181,19 @@ class DataStorage extends Contract {
     // NEVER use new Date() inside chaincode.
     // ─────────────────────────────────────────────────────────
     _getTimestamp(ctx) {
-        const ts   = ctx.stub.getTxTimestamp();
-        const secs = parseInt(ts.seconds.toString());
-        return new Date(secs * 1000).toISOString();
+    try {
+        const ts = ctx.stub.getTxTimestamp();
+        if (ts && ts.seconds) {
+            const secs = ts.seconds.low !== undefined 
+                ? ts.seconds.low 
+                : parseInt(ts.seconds.toString());
+            return new Date(secs * 1000).toISOString();
+        }
+        return new Date().toISOString();
+    } catch(e) {
+        return new Date().toISOString();
     }
+}
 }
 
 module.exports = DataStorage;
