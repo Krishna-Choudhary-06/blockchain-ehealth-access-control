@@ -5,6 +5,19 @@ export function bufferToHex(buffer) {
     .join('');
 }
 
+export function generateSalt(bytes = 16) {
+  const salt = new Uint8Array(bytes);
+  window.crypto.getRandomValues(salt);
+  return bufferToHex(salt.buffer);
+}
+
+export async function hashPassword(password, salt) {
+  const encoder = new TextEncoder();
+  const payload = encoder.encode(`${salt}:${password}`);
+  const digest = await window.crypto.subtle.digest('SHA-256', payload);
+  return bufferToHex(digest);
+}
+
 // Helper to convert Hex string to ArrayBuffer
 export function hexToBuffer(hex) {
   if (hex.length % 2 !== 0) {
@@ -270,56 +283,6 @@ export function revokeUserAccess(sharedKeys, userId) {
   const updatedKeys = { ...sharedKeys };
   delete updatedKeys[userId];
   return updatedKeys;
-}
-
-/**
- * Initializes RSA keys for the default simulation users (Doctors, Nurses) if not present.
- */
-export async function initializeMockUsersKeys() {
-  if (typeof window === 'undefined') return;
-  
-  if (localStorage.getItem('mock_keys_initialized')) return;
-
-  const defaultUsers = [
-    { name: 'Dr. Sarah Miller', role: 'Doctor', organization: 'Cardiology Dept' },
-    { name: 'Dr. James Watson', role: 'Doctor', organization: 'Cardiology Dept' },
-    { name: 'Nurse Kelly Smith', role: 'Nurse', organization: 'General Ward' },
-    { name: 'Patient Alex Carter', role: 'Patient', organization: 'Self' }
-  ];
-
-  const existingUsers = JSON.parse(localStorage.getItem('registered_users') || '[]');
-
-  for (const user of defaultUsers) {
-    const exists = existingUsers.some(u => u.name === user.name);
-    if (!exists) {
-      try {
-        const keyPair = await generateUserKeyPair();
-        const userId = 'UID-' + Math.floor(100000 + Math.random() * 900000);
-        
-        localStorage.setItem(`user_keys_${user.name}`, JSON.stringify({
-          userId,
-          name: user.name,
-          role: user.role,
-          organization: user.organization,
-          publicKey: keyPair.publicKey,
-          privateKey: keyPair.privateKey
-        }));
-
-        existingUsers.push({
-          userId,
-          name: user.name,
-          role: user.role,
-          organization: user.organization,
-          publicKey: keyPair.publicKey
-        });
-      } catch (e) {
-        console.error("Failed to generate keys for default user", user.name, e);
-      }
-    }
-  }
-
-  localStorage.setItem('registered_users', JSON.stringify(existingUsers));
-  localStorage.setItem('mock_keys_initialized', 'true');
 }
 
 /**

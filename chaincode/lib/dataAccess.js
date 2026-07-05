@@ -54,16 +54,34 @@ class DataAccess extends Contract {
         }
         const data = JSON.parse(dataBytes.toString());
 
-        const granted = acl.levelNum >= data.requiredLevelNum;
+        const requesterRank = acl.clearanceRank !== undefined
+            ? acl.clearanceRank
+            : this._clearanceRank(acl.level);
+        const requiredRank = data.requiredClearanceRank !== undefined
+            ? data.requiredClearanceRank
+            : this._clearanceRank(data.requiredLevel);
+        const authUsers = data.authorizedUsers || [];
+        const isOwner = requesterId === data.patientId || requesterId === data.ownerId;
+        const isListed = authUsers.includes(requesterId);
+        const isPublic = data.requiredLevel === 'L3';
+        const granted = isOwner || isPublic || (requesterRank >= requiredRank && isListed);
         const txId = ctx.stub.getTxID();
 
 const log = {
+    docType: 'ACCESS_LOG',
     txId,
     requesterId,
     dataId,
     action: granted ? 'GRANTED' : 'DENIED',
     requesterLevel: acl.level,
     dataLevel: data.requiredLevel,
+    policy: {
+        isOwner,
+        isPublic,
+        isListed,
+        requesterRank,
+        requiredRank
+    },
     time: this._getTimestamp(ctx)
 };
 
@@ -76,7 +94,10 @@ const log = {
             return JSON.stringify({
                 status: 'ACCESS_GRANTED',
                 ipfsHash: data.ipfsHash,
-                iv: data.iv
+                bgwHeader: data.bgwHeader,
+                payloadHash: data.payloadHash,
+                requiredLevel: data.requiredLevel,
+                authorizedUsers: data.authorizedUsers
             });
         }
 
@@ -85,6 +106,14 @@ const log = {
             message: 'Insufficient access level',
             ipfsHash: null
         });
+    }
+
+    _clearanceRank(level) {
+        const ranks = { L0: 3, L1: 2, L2: 1, L3: 0 };
+        if (!(level in ranks)) {
+            throw new Error('Invalid level: ' + level);
+        }
+        return ranks[level];
     }
 
     async getLogs(ctx) {

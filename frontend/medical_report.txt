@@ -1,5 +1,0 @@
-PATIENT NAME: Alex Carter
-DIAGNOSIS: Stable recovery following mild exercise-induced arrhythmia.
-RECOMMENDED TREATMENT: Daily cardiovascular checkups, low-sodium diet, and moderate physical activities.
-RESTRICTION LEVEL: Highly Confidential
-GENOMIC DATA SHA-256: 3a9a141b7829ac252dbef23f8b0e7a2b0e9f1a2380d90d81014ac2460d5b78ab

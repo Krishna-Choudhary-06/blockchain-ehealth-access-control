@@ -5,10 +5,10 @@ import SecurityBadges from './SecurityBadges'
 
 export default function AuthLayout({ children }) {
   const [stats, setStats] = useState({
-    identities: 142,
+    identities: 0,
     activeNodes: 7,
     status: 'ONLINE',
-    tps: 45
+    tps: 0
   })
 
   // Read registered users count
@@ -17,20 +17,11 @@ export default function AuthLayout({ children }) {
       const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
       setStats(prev => ({
         ...prev,
-        identities: 142 + users.length
+        identities: users.length
       }))
     } catch (e) {
       console.error(e)
     }
-
-    // Dynamic TPS simulation
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        ...prev,
-        tps: Math.floor(Math.random() * 10) + 40
-      }))
-    }, 3000)
-    return () => clearInterval(interval)
   }, [])
 
   return (

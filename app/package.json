@@ -2,6 +2,10 @@
   "name": "blockchain-ehealth-backend",
   "version": "1.0.0",
   "main": "server.js",
+  "scripts": {
+    "smoke:paper": "node testPaperWorkflow.js",
+    "smoke:full": "node testFullWorkflow.js"
+  },
   "dependencies": {
     "body-parser": "^2.3.0",
     "cors": "^2.8.6",
@@ -9,6 +13,7 @@
     "fabric-ca-client": "^2.2.20",
     "fabric-network": "^2.2.20",
     "ipfs-http-client": "^59.0.0",
+    "mcl-wasm": "^2.2.0",
     "multer": "^2.2.0"
   }
 }

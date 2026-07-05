@@ -20,23 +20,99 @@ class DataStorage extends Contract {
         }
     }
 
+    _levelMap() {
+        return { L0: 0, L1: 1, L2: 2, L3: 3 };
+    }
+
+    _clearanceRank(level) {
+        const ranks = { L0: 3, L1: 2, L2: 1, L3: 0 };
+        if (!(level in ranks)) {
+            throw new Error('Invalid level: ' + level);
+        }
+        return ranks[level];
+    }
+
+    _classifyCategory(category, fallbackLevel) {
+        const map = {
+            prescription: 'L0',
+            prescriptions: 'L0',
+            laboratory: 'L1',
+            lab: 'L1',
+            medical_history: 'L2',
+            history: 'L2',
+            billing: 'L3',
+            public: 'L3'
+        };
+        return map[String(category || '').toLowerCase()] || fallbackLevel || 'L0';
+    }
+
+    _parseJson(value, fallback) {
+        if (value === undefined || value === null || value === '') {
+            return fallback;
+        }
+        if (typeof value !== 'string') {
+            return value;
+        }
+        return JSON.parse(value);
+    }
+
+    async verifyData(ctx, dataId, patientId, ipfsHash, payloadHash) {
+        const valid = Boolean(dataId && patientId && ipfsHash && payloadHash);
+        return JSON.stringify({
+            valid,
+            reason: valid ? 'OK' : 'MISSING_REQUIRED_DATA_FIELDS'
+        });
+    }
+
     async storeHash(ctx, dataId, patientId,
-                    ipfsHash, iv, level) {
+                    ipfsHash, bgwHeader, level) {
         const levelMap = {
             'L0': 0, 'L1': 1, 'L2': 2, 'L3': 3
         };
 
-        if (!(level in levelMap)) {
-            throw new Error('Invalid level: ' + level);
+        const headerBundle = this._parseJson(bgwHeader, {});
+        const storedHeader = headerBundle.bgwHeader
+            ? JSON.stringify(headerBundle.bgwHeader)
+            : bgwHeader;
+        const authorizedUsers = headerBundle.authorizedUsers || [];
+        const payloadHash = headerBundle.payloadHash || '';
+        const category = headerBundle.category || '';
+        const metadata = headerBundle.metadata || {};
+        const updateToken = headerBundle.updateToken || '';
+        console.log('===== STORE HASH DEBUG =====');
+console.log('HEADER BUNDLE:', JSON.stringify(headerBundle));
+console.log('UPDATE TOKEN:', updateToken);
+
+        const classifiedLevel = this._classifyCategory(category, level);
+        if (!(classifiedLevel in levelMap)) {
+            throw new Error('Invalid level: ' + classifiedLevel);
         }
 
-        const record = {
+        const verified = JSON.parse(await this.verifyData(
+            ctx,
             dataId,
             patientId,
             ipfsHash,
-            iv,
-            requiredLevel: level,
-            requiredLevelNum: levelMap[level],
+            payloadHash
+        ));
+        if (!verified.valid) {
+            throw new Error('Data verification failed: ' + verified.reason);
+        }
+
+        const record = {
+    docType: 'DATA',
+    dataId,
+    patientId,
+    ipfsHash,
+    bgwHeader: storedHeader,
+    updateToken,
+    authorizedUsers,
+    payloadHash,
+    category,
+    metadata,
+            requiredLevel: classifiedLevel,
+            requiredLevelNum: levelMap[classifiedLevel],
+            requiredClearanceRank: this._clearanceRank(classifiedLevel),
             storedAt: this._getTimestamp(ctx)
         };
 
@@ -48,8 +124,62 @@ class DataStorage extends Contract {
         return JSON.stringify({
             success: true,
             dataId,
-            ipfsHash
+            ipfsHash,
+            payloadHash,
+            requiredLevel: classifiedLevel
         });
+    }
+
+    async updateBroadcastHeader(ctx, dataId, bgwHeader, authorizedUsersJson) {
+        const dataBytes = await ctx.stub.getState('DATA_' + dataId);
+        if (!dataBytes || dataBytes.length === 0) {
+            throw new Error('Not found: ' + dataId);
+        }
+
+        const record = JSON.parse(dataBytes.toString());
+        record.bgwHeader = bgwHeader;
+        record.authorizedUsers = this._parseJson(authorizedUsersJson, record.authorizedUsers || []);
+        record.headerUpdatedAt = this._getTimestamp(ctx);
+
+        await ctx.stub.putState(
+            'DATA_' + dataId,
+            Buffer.from(JSON.stringify(record))
+        );
+
+        ctx.stub.setEvent('BEHeaderUpdated',
+            Buffer.from(JSON.stringify({
+                dataId,
+                authorizedUsers: record.authorizedUsers
+            })));
+
+        return JSON.stringify(record);
+    }
+
+    async updatePrivacyLevel(ctx, dataId, level) {
+        const dataBytes = await ctx.stub.getState('DATA_' + dataId);
+        if (!dataBytes || dataBytes.length === 0) {
+            throw new Error('Not found: ' + dataId);
+        }
+        const levelMap = this._levelMap();
+        if (!(level in levelMap)) {
+            throw new Error('Invalid level: ' + level);
+        }
+
+        const record = JSON.parse(dataBytes.toString());
+        record.requiredLevel = level;
+        record.requiredLevelNum = levelMap[level];
+        record.requiredClearanceRank = this._clearanceRank(level);
+        record.policyUpdatedAt = this._getTimestamp(ctx);
+
+        await ctx.stub.putState(
+            'DATA_' + dataId,
+            Buffer.from(JSON.stringify(record))
+        );
+
+        ctx.stub.setEvent('PrivacyLevelUpdated',
+            Buffer.from(JSON.stringify({ dataId, level })));
+
+        return JSON.stringify(record);
     }
 
     async getData(ctx, dataId) {

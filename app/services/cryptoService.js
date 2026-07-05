@@ -1,8 +1,5 @@
 const crypto = require("crypto");
-const {
-    publicEncrypt,
-    privateDecrypt
-} = require("crypto");
+const bgw = require("./broadcast");
 
 function encryptFile(fileBuffer) {
 
@@ -46,93 +43,83 @@ function decryptFile(
 
     return decryptedData;
 }
-function encryptKeyForUser(
-    symmetricKey,
-    publicKey
-) {
 
-    const encryptedKey =
-        publicEncrypt(
-            publicKey,
-            Buffer.from(symmetricKey)
-        );
-
-    return encryptedKey.toString("base64");
+async function setupBroadcast(maxUsers) {
+    return bgw.setup({ n: Number(maxUsers || 100) });
 }
 
-function decryptKeyForUser(
-    encryptedKey,
-    privateKey
-) {
-
-    const decryptedKey =
-        privateDecrypt(
-            privateKey,
-            Buffer.from(
-                encryptedKey,
-                "base64"
-            )
-        );
-
-    return decryptedKey.toString();
+async function generateBroadcastPrivateKey(masterSecret, recipientId, publicKey) {
+    return bgw.keygen(masterSecret, Number(recipientId), publicKey);
 }
-function shareKeyWithUsers(
-    symmetricKey,
-    users
-) {
 
-    const sharedKeys = {};
+async function encryptFileForRecipients(fileBuffer, publicKey, recipientIds, options = {}) {
+    await bgw.init();
 
-    for (const user of users) {
-
-        sharedKeys[user.userId] =
-            encryptKeyForUser(
-                symmetricKey,
-                user.publicKey
-            );
-    }
-
-    return sharedKeys;
-}
-function revokeUserAccess(
-    sharedKeys,
-    userId
-) {
-
-    const updatedKeys = {
-        ...sharedKeys
-    };
-
-    delete updatedKeys[userId];
-
-    return updatedKeys;
-}
-function generateUserKeyPair() {
-
-    const {
+    return bgw.encryptForIpfs(
         publicKey,
-        privateKey
-    } = crypto.generateKeyPairSync(
-        "rsa",
+        recipientIds.map(Number),
+        fileBuffer,
         {
-            modulusLength: 2048
+            exportUpdateToken: true,
+            fabricAssetId: options.dataId,
+            ipfsCid: options.ipfsCid,
+            metadata: {
+                patientId: options.patientId,
+                level: options.level,
+                category: options.category,
+                filename: options.filename,
+                mimetype: options.mimetype,
+                ownerId: options.ownerId,
+                uploadedBy: options.uploadedBy,
+                uploaderRole: options.uploaderRole,
+                createdAt: new Date().toISOString()
+            }
         }
     );
+}
 
-    return {
-        publicKey: publicKey.export({
-            type: "pkcs1",
-            format: "pem"
-        }),
-        privateKey: privateKey.export({
-            type: "pkcs1",
-            format: "pem"
-        })
-    };
+async function decryptBroadcastFile(envelope, publicKey, privateKey) {
+    await bgw.init();
+
+    return bgw.decryptFromIpfsEnvelope(publicKey, privateKey, envelope);
+}
+
+async function updateBroadcastRecipients(publicKey, header, nextRecipientIds, updateToken) {
+    return bgw.updateHeader(
+        publicKey,
+        header,
+        nextRecipientIds.map(Number),
+        { updateToken }
+    );
+}
+
+function encryptKeyForUser() {
+    throw new Error("RSA key sharing has been removed. Use BGW broadcast encryption instead.");
+}
+
+function decryptKeyForUser() {
+    throw new Error("RSA key sharing has been removed. Use BGW broadcast encryption instead.");
+}
+
+function shareKeyWithUsers() {
+    throw new Error("RSA key sharing has been removed. Use BGW broadcast encryption instead.");
+}
+
+function revokeUserAccess() {
+    throw new Error("RSA key sharing has been removed. Use BGW updateHeader or re-encrypt.");
+}
+
+function generateUserKeyPair() {
+    throw new Error("RSA key pairs are not used by BGW. Call generateBroadcastPrivateKey instead.");
 }
 module.exports = {
     encryptFile,
     decryptFile,
+    setupBroadcast,
+    generateBroadcastPrivateKey,
+    encryptFileForRecipients,
+    decryptBroadcastFile,
+    updateBroadcastRecipients,
     encryptKeyForUser,
     decryptKeyForUser,
     shareKeyWithUsers,

@@ -22,4 +22,7 @@ logs/
 # Keys and certificates - security sensitive
 *.pem
 *.key
-*.crtapp/wallet/
+*.crt
+app/wallet/
+app/data/
+frontend/dist/

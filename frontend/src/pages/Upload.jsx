@@ -5,13 +5,30 @@ import {
   FiFile, FiX, FiEye, FiClock, FiDatabase, FiUser, 
   FiAlertCircle, FiArrowRight, FiShield 
 } from 'react-icons/fi'
-import { encryptFile, shareKeyWithUsers } from '../services/cryptoService'
 import { uploadRecord } from '../services/apiService'
+import { useAuth } from '../hooks/useAuth'
 
+function safeIdPart(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function makeRecordId(patientName, selectedFile) {
+  const patient = safeIdPart(patientName) || 'patient'
+  const fileName = safeIdPart(selectedFile?.name?.replace(/\.[^.]+$/, '')) || 'record'
+  return `${patient}-${fileName}-${Date.now()}`
+}
 
 export default function Upload() {
+  const { user } = useAuth()
   const [patientName, setPatientName] = useState('')
   const [sensitivityLevel, setSensitivityLevel] = useState('L0')
+  const [dataCategory, setDataCategory] = useState('prescription')
+  const [recipientIdsText, setRecipientIdsText] = useState('')
+  const [authorizedUsersText, setAuthorizedUsersText] = useState('')
   const [file, setFile] = useState(null)
   const [fileError, setFileError] = useState('')
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -35,6 +52,55 @@ export default function Upload() {
     }
   }, [previewUrl])
 
+  useEffect(() => {
+    const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+    const allowed = users.filter(user => {
+      if (sensitivityLevel === 'L0') {
+        return ['Doctor', 'Admin'].includes(user.role)
+      }
+      if (sensitivityLevel === 'L1') {
+        return ['Doctor', 'Admin', 'Lab'].includes(user.role)
+      }
+      if (sensitivityLevel === 'L2') {
+        return ['Doctor', 'Admin', 'Nurse', 'Staff'].includes(user.role)
+      }
+      return true
+    })
+    const withBgw = allowed.filter(user => user.bgwRecipientId)
+    if (withBgw.length > 0) {
+      setRecipientIdsText(withBgw.map(user => user.bgwRecipientId).join(','))
+      setAuthorizedUsersText(withBgw.map(user => user.userId).join(','))
+    } else {
+      setRecipientIdsText('')
+      setAuthorizedUsersText('')
+    }
+  }, [sensitivityLevel])
+
+  useEffect(() => {
+    if (user?.role === 'Patient' && !patientName) {
+      setPatientName(user.name || '')
+    }
+  }, [patientName, user])
+
+  useEffect(() => {
+    if (user?.role === 'Nurse') {
+      setDataCategory('laboratory')
+      setSensitivityLevel('L2')
+    } else if (user?.role === 'Admin') {
+      setDataCategory('billing')
+      setSensitivityLevel('L3')
+    } else if (user?.role === 'Patient') {
+      setDataCategory('medical_history')
+    }
+  }, [user?.role])
+
+  const currentUserKeys = user?.name
+    ? JSON.parse(localStorage.getItem(`user_keys_${user.name}`) || '{}')
+    : {}
+  const ownerId = user?.role === 'Patient'
+    ? (user.identityId || currentUserKeys.userId || safeIdPart(user.name))
+    : safeIdPart(patientName)
+
   const sensitivityLevels = [
     { code: 'L0', name: 'Doctor Only', desc: 'Restricted only to authorized doctors.', color: 'text-red-500 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30' },
     { code: 'L1', name: 'Lab Access', desc: 'Access allowed for laboratory diagnostics.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/30' },
@@ -50,7 +116,7 @@ export default function Upload() {
     }
 
     const extension = selectedFile.name.split('.').pop().toLowerCase()
-    const allowedExtensions = ['pdf', 'png', 'jpg', 'jpeg']
+    const allowedExtensions = ['pdf', 'png', 'jpg', 'jpeg', 'txt', 'csv', 'doc', 'docx', 'xls', 'xlsx']
     const rejectedExtensions = ['exe', 'bat', 'apk']
 
     // Check size (10MB limit)
@@ -70,7 +136,7 @@ export default function Upload() {
     }
 
     if (!allowedExtensions.includes(extension)) {
-      const errorMsg = `Invalid file type. Only PDF, PNG, JPG, and JPEG files are supported.`
+      const errorMsg = `Invalid file type. Supported: PDF, images, text, CSV, Word, and Excel documents.`
       setFileError(errorMsg)
       toast.error(errorMsg)
       return false
@@ -90,7 +156,7 @@ export default function Upload() {
           URL.revokeObjectURL(previewUrl)
         }
         setPreviewUrl(URL.createObjectURL(selectedFile))
-        setReportId(Math.random().toString(36).substring(3, 9).toUpperCase())
+        setReportId(makeRecordId(patientName, selectedFile))
       } else {
         setFile(null)
         setPreviewUrl(null)
@@ -124,7 +190,7 @@ export default function Upload() {
           URL.revokeObjectURL(previewUrl)
         }
         setPreviewUrl(URL.createObjectURL(selectedFile))
-        setReportId(Math.random().toString(36).substring(3, 9).toUpperCase())
+        setReportId(makeRecordId(patientName, selectedFile))
       } else {
         setFile(null)
         setPreviewUrl(null)
@@ -178,70 +244,76 @@ export default function Upload() {
     setResult(null)
 
     try {
-      // 1. Read file as ArrayBuffer
-      const fileBuffer = await file.arrayBuffer()
-      setProgress(25)
-      setCurrentStep('Encrypting file locally with AES-256-CBC...')
+      const recipientIds = recipientIdsText
+        .split(',')
+        .map(value => Number(value.trim()))
+        .filter(value => Number.isInteger(value) && value > 0)
+      const authorizedUsers = authorizedUsersText
+        .split(',')
+        .map(value => value.trim())
+        .filter(Boolean)
 
-      // 2. Perform AES local encryption
-      const { encryptedData, key, iv } = await encryptFile(fileBuffer)
+      if (recipientIds.length === 0) {
+        throw new Error('Enter at least one numeric BGW recipient index.')
+      }
+      if (authorizedUsers.length === 0) {
+        throw new Error('Enter at least one registered Fabric user id.')
+      }
+
+      setProgress(25)
+      setCurrentStep('Preparing BGW recipient subset and access policy...')
       
       setProgress(50)
-      setCurrentStep('Generating AES-256 Symmetric Key and unique IV vector...')
+      setCurrentStep('Sending medical file to backend for BGW encryption...')
 
-      // 3. Instead of IPFS upload locally, we'll send it to the backend which does it!
       setProgress(70)
-      setCurrentStep('Sending encrypted data to Backend for IPFS + Blockchain ledger upload...')
+      setCurrentStep('Uploading encrypted BGW envelope to IPFS and writing Fabric policy...')
       
-      const fileId = reportId || 'DATA-' + Math.floor(1000 + Math.random() * 9000);
+      const fileId = reportId || makeRecordId(patientName, file)
       
-      // We need to send it as a Blob/File
-      const encryptedBlob = new Blob([encryptedData], { type: 'application/octet-stream' })
-      const encryptedFileObj = new File([encryptedBlob], `${file.name}.enc`, { type: 'application/octet-stream' })
-      
-      const apiResult = await uploadRecord(patientName.replace(/ /g, ''), fileId, sensitivityLevel, encryptedFileObj)
+      const apiResult = await uploadRecord(
+        patientName.replace(/ /g, ''),
+        fileId,
+        sensitivityLevel,
+        file,
+        {
+          category: dataCategory,
+          recipientIds,
+          authorizedUsers,
+          ownerId,
+          uploadedBy: user?.identityId || currentUserKeys.userId || user?.name || '',
+          uploaderRole: user?.role || ''
+        }
+      )
       
       if (!apiResult.success) throw new Error(apiResult.error || 'Upload failed at backend')
       
-      // Getting back the IPFS Hash from the backend
-      const cid = apiResult.data?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
+      const cid = apiResult.ipfsHash || apiResult.data?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
 
-      // 4. Secure key sharing (RSA-OAEP)
-      // Retrieve registered users to encrypt the AES key with their public keys
-      const registeredUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
-      const usersToShareWith = registeredUsers.filter(u => {
-        if (u.role === 'Doctor' || u.role === 'Admin') return true
-        if (sensitivityLevel === 'L2' || sensitivityLevel === 'L3') {
-          if (u.role === 'Nurse') return true
-        }
-        return false
-      })
-
-      // Encrypt the AES key for all authorized users
-      const sharedKeys = await shareKeyWithUsers(key, usersToShareWith)
-
-      const mockTxId = 'tx_' + Array.from({ length: 32 }, () => 
-        Math.floor(Math.random() * 16).toString(16)
-      ).join('')
-
-      const certId = 'CERT-' + Math.floor(100000 + Math.random() * 900000)
+      const txId = apiResult.txId || apiResult.data?.txId || apiResult.data?.transactionId || apiResult.payloadHash || fileId
+      const certId = apiResult.certificateId || apiResult.data?.certificateId || `CERT-${fileId}`
 
       // Store in localStorage patient records list so it can be retrieved across dashboards
       const ledgerRecord = {
-        id: reportId || 'PAT-' + Math.floor(1000 + Math.random() * 9000),
-        name: `${reportId || 'PAT-' + Math.floor(1000 + Math.random() * 9000)}: ${file.name}`,
+        id: fileId,
+        name: `${fileId}: ${file.name}`,
         sensitivity: sensitivityLevel,
+        category: dataCategory,
         ipfsHash: cid,
+        payloadHash: apiResult.payloadHash,
         uploadTime: new Date().toLocaleString(),
-        aesKeyHex: key, // Keep for Patient self-decryption
-        ivHex: iv,
-        sharedKeys: sharedKeys, // userId -> encrypted key base64
+        bgwHeader: apiResult.bgwHeader,
+        recipients: recipientIds,
+        authorizedUsers,
+        ownerId,
+        uploadedBy: user?.identityId || currentUserKeys.userId || user?.name || '',
+        uploaderRole: user?.role || '',
         patientName: patientName,
         fileName: file.name,
         fileSize: formatBytes(file.size),
-        encryptionStatus: 'Encrypted (AES-256-CBC)',
+        encryptionStatus: 'BGW Broadcast Encryption + AES-256-GCM',
         certificateId: certId,
-        txId: mockTxId
+        txId
       }
 
       const existingRecords = JSON.parse(localStorage.getItem('patient_records') || '[]')
@@ -252,8 +324,9 @@ export default function Upload() {
       
       setResult({
         ipfsHash: cid,
-        txId: mockTxId,
-        encryptionStatus: 'Encrypted (AES-256-CBC)',
+        payloadHash: apiResult.payloadHash,
+        txId,
+        encryptionStatus: 'BGW Broadcast Encryption + AES-256-GCM',
         fileName: file.name,
         fileSize: formatBytes(file.size),
         uploadTime: ledgerRecord.uploadTime,
@@ -266,7 +339,7 @@ export default function Upload() {
       toast.success('Medical record securely committed to Blockchain and IPFS!')
     } catch (error) {
       console.error(error)
-      toast.error(`Symmetric encryption or IPFS upload failed: ${error.message}`)
+      toast.error(`BGW/IPFS/Fabric upload failed: ${error.message}`)
       setUploading(false)
       setProgress(0)
       setCurrentStep('')
@@ -276,6 +349,9 @@ export default function Upload() {
   const handleReset = () => {
     setPatientName('')
     setSensitivityLevel('L0')
+    setDataCategory('prescription')
+    setRecipientIdsText('')
+    setAuthorizedUsersText('')
     setFile(null)
     setFileError('')
     if (previewUrl) {
@@ -315,12 +391,12 @@ export default function Upload() {
               Secure File Upload
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-2 text-sm max-w-2xl">
-              Encrypt files on the client side with AES-256 and store their cryptographic hashes on the ledger for access authorization checking.
+              Store encrypted medical records in IPFS while Fabric enforces privacy levels, BGW headers, content hashes, and access logs.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-mono bg-purple-50 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-900/30 px-3.5 py-2 rounded-xl text-purple-600 dark:text-purple-400 shadow-sm self-start md:self-center">
             <FiShield />
-            <span>HYBRID ENCRYPTION SYSTEM</span>
+            <span>BGW + FABRIC + IPFS</span>
           </div>
         </div>
 
@@ -362,21 +438,6 @@ export default function Upload() {
               <h2 className="text-xl font-bold text-slate-950 dark:text-white">Upload Specifications</h2>
               
               <form onSubmit={handleSubmit} className="space-y-6">
-                 <button
-                  id="mock-upload-btn"
-                  type="button"
-                  onClick={() => {
-                    const mockContent = `PATIENT NAME: Alex Carter\nDIAGNOSIS: Stable recovery following mild exercise-induced arrhythmia.\nRECOMMENDED TREATMENT: Daily cardiovascular checkups, low-sodium diet, and moderate physical activities.\nRESTRICTION LEVEL: Highly Confidential\nGENOMIC DATA SHA-256: 3a9a141b7829ac252dbef23f8b0e7a2b0e9f1a2380d90d81014ac2460d5b78ab\n`;
-                    const mockFile = new File([mockContent], 'medical_report.pdf', { type: 'application/pdf' });
-                    setFile(mockFile);
-                    setReportId('MOCK-REP');
-                    toast.success('Mock file loaded successfully!');
-                  }}
-                  className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350 rounded-2xl py-3.5 font-bold text-xs border border-dashed border-slate-300 dark:border-slate-800 transition-all text-center cursor-pointer mb-2"
-                >
-                  Load E2E Verification Mock Report (PDF)
-                </button>
-                
                 {/* Patient Name field */}
                 <div className="space-y-1.5">
                   <label htmlFor="patientName" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
@@ -391,7 +452,7 @@ export default function Upload() {
                       id="patientName"
                       value={patientName}
                       onChange={(e) => setPatientName(e.target.value)}
-                      placeholder="e.g. Alice Johnson"
+                      placeholder="Enter the patient name for this upload"
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl pl-10 pr-4 py-3.5 text-slate-950 dark:text-white placeholder-slate-400/80 focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
                     />
                   </div>
@@ -427,6 +488,54 @@ export default function Upload() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="dataCategory" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
+                      Data Category
+                    </label>
+                    <select
+                      id="dataCategory"
+                      value={dataCategory}
+                      onChange={(e) => setDataCategory(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
+                    >
+                      <option value="prescription">Prescriptions - L0</option>
+                      <option value="laboratory">Laboratory Reports - L1</option>
+                      <option value="medical_history">Medical History - L2</option>
+                      <option value="billing">Billing Information - L3</option>
+                      <option value="insurance">Insurance / Claims - L3</option>
+                      <option value="discharge_summary">Discharge Summary - L2</option>
+                      <option value="administrative">Administrative Document - L3</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="recipientIds" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
+                      BGW Recipient Indexes
+                    </label>
+                    <input
+                      id="recipientIds"
+                      value={recipientIdsText}
+                      onChange={(e) => setRecipientIdsText(e.target.value)}
+                      placeholder="e.g. 1,2,5"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white placeholder-slate-400/80 focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="authorizedUsers" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
+                    Authorized Fabric User IDs
+                  </label>
+                  <input
+                    id="authorizedUsers"
+                    value={authorizedUsersText}
+                    onChange={(e) => setAuthorizedUsersText(e.target.value)}
+                    placeholder="Comma-separated registered user IDs"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white placeholder-slate-400/80 focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+
                 {/* File Upload drag area */}
                 <div className="space-y-2">
                   <span className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
@@ -451,7 +560,7 @@ export default function Upload() {
                         type="file"
                         onChange={handleFileChange}
                         className="hidden"
-                        accept=".pdf,.png,.jpg,.jpeg"
+                        accept=".pdf,.png,.jpg,.jpeg,.txt,.csv,.doc,.docx,.xls,.xlsx"
                       />
                       
                       <div className="h-12 w-12 rounded-2xl bg-purple-50 dark:bg-purple-900/10 flex items-center justify-center text-purple-600 dark:text-purple-400 mb-4 shadow-sm">
@@ -463,7 +572,7 @@ export default function Upload() {
                       </p>
                       
                       <p className="text-xs text-slate-550 dark:text-slate-500 text-center mt-1.5">
-                        Allowed types: PDF, PNG, JPG, JPEG (Max 10MB)
+                        Allowed: PDF, images, text, CSV, Word, Excel (Max 10MB)
                       </p>
 
                       <div className="flex items-center gap-3 mt-4 text-[10px] uppercase font-bold tracking-wider text-red-550 dark:text-red-400 bg-red-50 dark:bg-red-950/20 px-3 py-1.5 rounded-lg border border-red-100 dark:border-red-900/20">
@@ -540,7 +649,7 @@ export default function Upload() {
                             <span>PDF Document Verified</span>
                           </div>
                           
-                            {/* Simulated PDF container to look like standard reader view */}
+                            {/* PDF metadata container to look like a standard reader view */}
                             <div className="border border-slate-250 dark:border-slate-900 rounded-xl p-4 bg-white dark:bg-slate-900/50 text-[10px] text-slate-400 text-left font-mono space-y-2 h-24 overflow-hidden mask-fade-bottom">
                               <p className="font-bold border-b border-slate-100 dark:border-slate-800 pb-1 text-slate-600 dark:text-slate-355">MEDICAL CASE SUMMARY</p>
                               <p>Patient Name: {patientName || 'N/A'}</p>

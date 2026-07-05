@@ -72,7 +72,7 @@ export default function Performance() {
     // Simulate steps in experiment execution
     setTimeout(() => {
       setProgress(25)
-      setCurrentLog('Generating key pairs and local AES-256 buffers...')
+      setCurrentLog('Generating BGW recipient headers and AES-GCM content envelopes...')
     }, 800)
 
     setTimeout(() => {
@@ -821,7 +821,7 @@ export default function Performance() {
               <div className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-normal flex items-start gap-1.5">
                 <FiInfo className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
                 <span>
-                  <strong>Literature Comparison:</strong> Proposed Method client-side crypto overhead (42ms AES key creation) is <strong>88.0% faster</strong> than MedRec (350ms asymmetric RSA schemes) and <strong>72.0% faster</strong> than MedChain (190ms).
+                  <strong>Literature Comparison:</strong> Proposed Method off-chain crypto overhead includes BGW key encapsulation plus AES-GCM payload encryption, reducing ledger-side computation compared with per-user asymmetric wrapping.
                 </span>
               </div>
             </div>
@@ -868,7 +868,7 @@ export default function Performance() {
                   <td className="py-4 font-mono text-[10.5px]">Tendermint BFT</td>
                   <td className="py-4">Metadata Filters</td>
                   <td className="py-4 text-emerald-500 font-semibold">
-                    Yes (Proxy AES)
+                    Yes (Proxy Symmetric)
                   </td>
                   <td className="py-4 text-emerald-500 font-semibold">
                     Yes (Ledger)
@@ -902,7 +902,7 @@ export default function Performance() {
                   <td className="py-4 font-mono text-[10.5px]">Fabric Raft/PBFT</td>
                   <td className="py-4">Adaptive (L0-L3 Drop)</td>
                   <td className="py-4 text-emerald-500 font-semibold">
-                    Yes (Hybrid AES/RSA)
+                    Yes (BGW + AES-GCM)
                   </td>
                   <td className="py-4 text-emerald-500 font-semibold">
                     Yes (Immutable Event)

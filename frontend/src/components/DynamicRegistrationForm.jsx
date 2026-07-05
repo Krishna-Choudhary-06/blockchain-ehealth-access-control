@@ -1,7 +1,7 @@
 import React from 'react'
 import { 
   User, Mail, Phone, Calendar, Hash, Award, 
-  Building, Briefcase, Key, ShieldCheck, Heart, Shield 
+  Building, Briefcase, Key, ShieldCheck, Heart, Shield, Lock
 } from 'lucide-react'
 import ValidationMessage from './ValidationMessage'
 
@@ -26,7 +26,7 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
               <input
                 type="text"
                 {...register('name', { required: 'Full Name is required' })}
-                placeholder="e.g. Dr. Sarah Miller"
+                placeholder="e.g. Dr Ram"
                 className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
               />
             </div>
@@ -81,6 +81,45 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
               />
             </div>
             <ValidationMessage error={errors.phone} />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+              Create Password
+            </label>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                <Lock className="w-4 h-4" />
+              </div>
+              <input
+                type="password"
+                {...register('accountPassword', {
+                  required: 'Password is required',
+                  minLength: { value: 8, message: 'Password must be at least 8 characters' }
+                })}
+                placeholder="Create an account password"
+                className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+              />
+            </div>
+            <ValidationMessage error={errors.accountPassword} />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+              Confirm Password
+            </label>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                <Lock className="w-4 h-4" />
+              </div>
+              <input
+                type="password"
+                {...register('confirmPassword', { required: 'Confirm your password' })}
+                placeholder="Re-enter password"
+                className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+              />
+            </div>
+            <ValidationMessage error={errors.confirmPassword} />
           </div>
 
           {/* Patient Details (DOB, Gender, Blood Group) */}

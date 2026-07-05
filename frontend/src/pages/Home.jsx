@@ -1,44 +1,41 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import cliniciansImage from '../assets/clinicians.jpg'
+import { getLogs } from '../services/apiService'
 
 export default function Home() {
   const [logs, setLogs] = useState([
-    { id: 1, timestamp: new Date().toLocaleTimeString(), message: "System initialized successfully.", type: "success" }
+    { id: 1, timestamp: new Date().toLocaleTimeString(), message: "Ledger audit preview ready.", type: "success" }
   ])
-  const [isSimulating, setIsSimulating] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const simulatePolicyCheck = () => {
-    setIsSimulating(true)
-
-    // Step 1: Request access
-    setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "Received access request from Dr. Sarah Miller (Role: Cardiologist) for Patient ID: PAT-8820.", type: "info" }
-      ])
-    }, 800)
-
-    // Step 2: Policy Evaluation
-    setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: Date.now() + 1, timestamp: new Date().toLocaleTimeString(), message: "Evaluating consensus policy: (Role = 'Cardiologist' AND Dept = 'Cardiology' AND Consent = 'Granted').", type: "warning" }
-      ])
-    }, 1800)
-
-    // Step 3: Blockchain Transaction Successful
-    setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: Date.now() + 2, timestamp: new Date().toLocaleTimeString(), message: "Access GRANTED. Transaction committed to Hyperledger Fabric Ledger (Block #412, Hash: 0x8f2d...e9a1).", type: "success" }
-      ])
-      setIsSimulating(false)
-    }, 3000)
+  const loadLedgerLogs = async () => {
+    setIsRefreshing(true)
+    try {
+      const response = await getLogs()
+      if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+        setLogs(response.data.slice(0, 6).map((entry, index) => ({
+          id: `${entry.requesterId}-${entry.dataId}-${entry.time}-${index}`,
+          timestamp: entry.time ? new Date(entry.time).toLocaleTimeString() : new Date().toLocaleTimeString(),
+          message: `${entry.action} request by ${entry.requesterId} for ${entry.dataId}. Requester level: ${entry.requesterLevel || 'N/A'}, data level: ${entry.dataLevel || 'N/A'}.`,
+          type: entry.action === 'GRANTED' ? 'success' : 'warning'
+        })))
+      } else {
+        setLogs([{ id: 1, timestamp: new Date().toLocaleTimeString(), message: "No Fabric access logs have been committed yet.", type: "info" }])
+      }
+    } catch (error) {
+      setLogs([{ id: 1, timestamp: new Date().toLocaleTimeString(), message: `Unable to read Fabric logs: ${error.message}`, type: "warning" }])
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
+  useEffect(() => {
+    loadLedgerLogs()
+  }, [])
+
   const clearLogs = () => {
-    setLogs([{ id: 1, timestamp: new Date().toLocaleTimeString(), message: "System logs cleared.", type: "info" }])
+    setLogs([{ id: 1, timestamp: new Date().toLocaleTimeString(), message: "Ledger preview cleared locally.", type: "info" }])
   }
 
   return (
@@ -67,7 +64,7 @@ export default function Home() {
 
           {/* Subtitle */}
           <p className="text-slate-600 dark:text-slate-400 text-base md:text-lg leading-relaxed max-w-2xl mx-auto lg:mx-0 animate-fade-in-up delay-200 opacity-0">
-            Enforce adaptive patient access policies using Hyperledger Fabric smart contracts, IPFS storage, and localized AES encryption.
+            Enforce adaptive patient access policies using Hyperledger Fabric smart contracts, IPFS storage, and BGW broadcast encryption.
           </p>
 
           {/* Action Buttons */}
@@ -333,7 +330,7 @@ export default function Home() {
                 </svg>
               </div>
               <h4 className="text-base font-bold text-slate-900 dark:text-white mb-2">Encrypt</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">AES-256 local encryption</p>
+              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">BGW + AES-GCM envelope</p>
             </div>
 
             {/* Connector Arrow 2 */}
@@ -399,35 +396,35 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Live Simulation Console */}
+      {/* Ledger Audit Console */}
       <div className="bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 backdrop-blur-xl shadow-lg dark:shadow-2xl relative transition-all duration-300">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 border-b border-slate-100 dark:border-slate-800 pb-6 gap-4">
           <div>
             <h3 className="text-xl font-bold text-slate-955 dark:text-white flex items-center">
               <span className="w-2.5 h-2.5 rounded-full bg-purple-500 mr-2.5 animate-pulse"></span>
-              Access Control Policy Simulator
+              Fabric Access Audit Preview
             </h3>
-            <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Test attribute-based access policy evaluation using local state updates.</p>
+            <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Read the latest access decisions from the backend ledger log endpoint.</p>
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={simulatePolicyCheck}
-              disabled={isSimulating}
-              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 shadow-md ${isSimulating
+              onClick={loadLedgerLogs}
+              disabled={isRefreshing}
+              className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 shadow-md ${isRefreshing
                   ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-200 dark:border-slate-700"
                   : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/10 dark:shadow-purple-900/30 hover:scale-[1.02] cursor-pointer"
                 }`}
             >
-              {isSimulating ? (
+              {isRefreshing ? (
                 <span className="flex items-center">
                   <svg className="animate-spin -ml-1 mr-2.5 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Evaluating Smart Contract...
+                  Reading Ledger...
                 </span>
               ) : (
-                "Simulate Policy Check"
+                "Refresh Ledger Logs"
               )}
             </button>
             <button

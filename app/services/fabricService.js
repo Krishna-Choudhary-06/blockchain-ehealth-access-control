@@ -11,7 +11,7 @@ const ccpPath = path.resolve(
     'connection-org1.json'
 );
 
-const walletPath = path.join(process.cwd(), 'wallet');
+const walletPath = path.join(__dirname, '..', 'wallet');
 
 async function getContract() {
     const ccp = JSON.parse(fs.readFileSync(ccpPath, 'utf8'));
@@ -70,11 +70,88 @@ async function assignLevel(userId, level) {
     }
 }
 
-async function storeHash(dataId, patientId, ipfsHash, iv, level) {
+async function getAllUsers() {
+    const { contract, gateway } = await getContract();
+    try {
+        const result = await contract.evaluateTransaction(
+            'UserRegistry:getAllUsers'
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
+async function storeHash(
+    dataId,
+    patientId,
+    ipfsHash,
+    bgwHeader,
+    updateToken,
+    level,
+    authorizedUsers = [],
+    payloadHash = '',
+    category = '',
+    metadata = {}
+){
+    const { contract, gateway } = await getContract();
+    try {
+        const headerBundle = {
+    bgwHeader: JSON.parse(bgwHeader),
+    updateToken,
+    authorizedUsers,
+    payloadHash,
+    category,
+    metadata
+};
+        const result = await contract.submitTransaction(
+            'DataStorage:storeHash',
+            dataId,
+            patientId,
+            ipfsHash,
+            JSON.stringify(headerBundle),
+            level
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
+async function updateBroadcastHeader(dataId, bgwHeader, authorizedUsers = []) {
     const { contract, gateway } = await getContract();
     try {
         const result = await contract.submitTransaction(
-            'DataStorage:storeHash', dataId, patientId, ipfsHash, iv, level
+            'DataStorage:updateBroadcastHeader',
+            dataId,
+            bgwHeader,
+            JSON.stringify(authorizedUsers)
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
+async function updatePrivacyLevel(dataId, level) {
+    const { contract, gateway } = await getContract();
+    try {
+        const result = await contract.submitTransaction(
+            'DataStorage:updatePrivacyLevel',
+            dataId,
+            level
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
+async function getAllData() {
+    const { contract, gateway } = await getContract();
+    try {
+        const result = await contract.evaluateTransaction(
+            'DataStorage:getAllData'
         );
         return JSON.parse(result.toString());
     } finally {
@@ -105,11 +182,29 @@ async function getLogs() {
         gateway.disconnect();
     }
 }
+async function getData(dataId) {
+    const { contract, gateway } = await getContract();
 
+    try {
+        const result = await contract.evaluateTransaction(
+            'DataStorage:getData',
+            dataId
+        );
+
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
 module.exports = {
     registerUser,
     assignLevel,
+    getAllUsers,
     storeHash,
+    updateBroadcastHeader,
+    updatePrivacyLevel,
+    getAllData,
     requestAccess,
+    getData,
     getLogs
 };

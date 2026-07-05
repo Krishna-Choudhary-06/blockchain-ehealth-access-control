@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Lock, Eye, EyeOff, Key, Fingerprint, FileUp, ShieldAlert, Check } from 'lucide-react'
+import { Key, Fingerprint, FileUp, Check, Lock } from 'lucide-react'
 import ValidationMessage from './ValidationMessage'
 import toast from 'react-hot-toast'
 
 export default function LoginForm({ verifiedUser, onSubmit }) {
-  const [showPassword, setShowPassword] = useState(false)
   const [pemFile, setPemFile] = useState(null)
   const [uploading, setUploading] = useState(false)
+  const hasStoredPassword = Boolean(verifiedUser.passwordHash)
 
   const {
     register,
@@ -34,16 +34,11 @@ export default function LoginForm({ verifiedUser, onSubmit }) {
         setPemFile(file.name)
         toast.success('Cryptographic Private Key loaded successfully!')
       } else {
-        toast.error('Invalid PEM key: Make sure it is a valid RSA Private Key.')
+        toast.error('Invalid PEM key: make sure it is a valid private key file.')
       }
       setUploading(false)
     }
     reader.readAsText(file)
-  }
-
-  const handleForgotPassword = (e) => {
-    e.preventDefault()
-    toast.success(`Password recovery token sent to ${verifiedUser.email}`)
   }
 
   const handleBiometric = () => {
@@ -64,7 +59,7 @@ export default function LoginForm({ verifiedUser, onSubmit }) {
           Step 4: Credential Authentication
         </h3>
         <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
-          Provide your security credentials to unlock your decentralized eHealth dashboard session.
+          Enter the password created during enrollment and optionally attach a local signing key.
         </p>
       </div>
 
@@ -108,39 +103,28 @@ export default function LoginForm({ verifiedUser, onSubmit }) {
         </div>
       </div>
 
-      {/* Password Field */}
       <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-            Account Password
-          </label>
-          <button
-            type="button"
-            onClick={handleForgotPassword}
-            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
-          >
-            Forgot Password?
-          </button>
-        </div>
+        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+          Account Password
+        </label>
         <div className="relative group">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
             <Lock className="w-4 h-4" />
           </div>
           <input
-            type={showPassword ? 'text' : 'password'}
-            {...register('password', { required: 'Password is required' })}
-            placeholder="••••••••"
-            className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-10 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+            type="password"
+            {...register('password', hasStoredPassword ? { required: 'Password is required' } : {})}
+            disabled={!hasStoredPassword}
+            placeholder={hasStoredPassword ? 'Enter enrollment password' : 'Legacy identity: no password was created'}
+            className="w-full bg-slate-50/50 disabled:bg-slate-100 dark:bg-slate-950 disabled:dark:bg-slate-900 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm disabled:cursor-not-allowed disabled:text-slate-500"
           />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-650 cursor-pointer"
-          >
-            {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
-          </button>
         </div>
         <ValidationMessage error={errors.password} />
+        {!hasStoredPassword && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400">
+            This identity was enrolled before password support. Re-enroll it to require password login.
+          </p>
+        )}
       </div>
 
       {/* Cryptographic PEM Key Upload */}

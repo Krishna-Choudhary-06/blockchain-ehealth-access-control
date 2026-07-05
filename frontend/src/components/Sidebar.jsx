@@ -21,6 +21,7 @@ export default function Sidebar() {
     ],
     Doctor: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
       { name: 'Patient Files', path: '#records', icon: FiFileText },
       { name: 'Access Logs', path: '#logs', icon: FiClock },
       { name: 'Profile', path: '#profile', icon: FiUser },
@@ -28,6 +29,7 @@ export default function Sidebar() {
     ],
     Nurse: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
       { name: 'Lab Reports', path: '#lab-reports', icon: FiFileText },
       { name: 'Access History', path: '#access-history', icon: FiClock },
       { name: 'Profile', path: '#profile', icon: FiUser },
@@ -35,6 +37,7 @@ export default function Sidebar() {
     ],
     Admin: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
       { name: 'Users', path: '#users', icon: FiUsers },
       { name: 'Access Logs', path: '#access-logs', icon: FiClock },
       { name: 'Blockchain Explorer', path: '/explorer', icon: FiActivity },
@@ -45,6 +48,12 @@ export default function Sidebar() {
 
   const role = user?.role || 'Patient'
   const activeMenu = menus[role] || menus.Patient
+  const initials = (user?.name || 'Guest')
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
   return (
     <aside className="w-64 border-r border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-950 flex flex-col justify-between h-screen sticky top-0 transition-colors duration-300">
@@ -111,11 +120,9 @@ export default function Sidebar() {
       {/* User Info footer in Sidebar */}
       <div className="p-6 border-t border-slate-200 dark:border-slate-900/50">
         <div className="flex items-center space-x-3">
-          <img 
-            src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80'} 
-            alt={user?.name} 
-            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 object-cover"
-          />
+          <div className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-purple-600/10 text-purple-600 dark:text-purple-300 flex items-center justify-center text-[11px] font-black">
+            {initials}
+          </div>
           <div className="overflow-hidden">
             <h4 className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">{user?.name || 'Guest User'}</h4>
             <span className="text-[9px] font-medium text-slate-450 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded-md mt-0.5 inline-block uppercase tracking-wider font-mono">

@@ -7,8 +7,8 @@ import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, ShieldAlert, 
   Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X 
 } from 'lucide-react'
-import { generateUserKeyPair, getDelay } from '../services/cryptoService'
-import { registerUser, assignLevel } from '../services/apiService'
+import { generateSalt, generateUserKeyPair, getDelay, hashPassword } from '../services/cryptoService'
+import { registerUser, assignLevel, getBGWState, generateBGWPrivateKey } from '../services/apiService'
 import StepProgress from './StepProgress'
 import RoleSelector from './RoleSelector'
 import DynamicRegistrationForm from './DynamicRegistrationForm'
@@ -37,6 +37,8 @@ export default function EnrollmentWizard() {
       name: '',
       email: '',
       phone: '',
+      accountPassword: '',
+      confirmPassword: '',
       organization: '',
       department: '',
       specialization: '',
@@ -76,11 +78,15 @@ export default function EnrollmentWizard() {
 
     if (step === 2) {
       // Validate Step 2 fields based on role
-      const fieldsToValidate = ['name', 'email', 'phone']
+      const fieldsToValidate = ['name', 'email', 'phone', 'accountPassword', 'confirmPassword']
       if (formData.role === 'Patient') {
         fieldsToValidate.push('dob', 'gender', 'bloodGroup')
       }
       const isStep2Valid = await trigger(fieldsToValidate)
+      if (isStep2Valid && formData.accountPassword !== formData.confirmPassword) {
+        toast.error('Passwords do not match.')
+        return
+      }
       if (isStep2Valid) {
         setStep(3)
       } else {
@@ -139,10 +145,12 @@ export default function EnrollmentWizard() {
 
     try {
       await new Promise(resolve => setTimeout(resolve, getDelay(800)))
-      setEnrollmentProgress('Generating secure 2048-bit RSA-OAEP credentials locally in browser...')
-      toast.loading('Generating cryptographic credentials and RSA-OAEP key pairs...', { id: toastId })
+      setEnrollmentProgress('Generating browser identity key material for certificate registration...')
+      toast.loading('Generating registration credentials...', { id: toastId })
       
       const keyPair = await generateUserKeyPair()
+      const passwordSalt = generateSalt()
+      const passwordHash = await hashPassword(formData.accountPassword, passwordSalt)
       
       await new Promise(resolve => setTimeout(resolve, getDelay(800)))
       setEnrollmentProgress('Committing attribute records to Hyperledger Fabric channel ledger...')
@@ -161,18 +169,28 @@ export default function EnrollmentWizard() {
       const apiResult = await registerUser(identityId, keyPair.publicKey, formData.role)
       if (!apiResult.success) throw new Error(apiResult.error || 'Registration failed')
       
-      // Assign privacy level
-      let securityLvl = 'L1'
-      if (formData.role === 'Admin') securityLvl = 'L3'
-      else if (formData.role === 'Doctor') securityLvl = 'L2'
+      // Paper privacy model: L0 is most restrictive, L3 is public.
+      let securityLvl = 'L2'
+      if (formData.role === 'Admin') securityLvl = 'L0'
+      else if (formData.role === 'Doctor') securityLvl = 'L0'
       else if (formData.role === 'Nurse') securityLvl = 'L2'
+      else if (formData.role === 'Accountant') securityLvl = 'L3'
+      else if (formData.role === 'Patient') securityLvl = 'L0'
       if (formData.securityLevel) securityLvl = 'L' + formData.securityLevel
 
       setEnrollmentProgress('Assigning Privacy Level on Fabric...')
       await assignLevel(identityId, securityLvl)
 
-      const mockTxHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-      
+      const existingUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
+      setEnrollmentProgress('Issuing BGW broadcast private key for the enrolled recipient...')
+      const bgwState = await getBGWState()
+      const recipientIndex = existingUsers.length + 1
+      const bgwPrivateKeyResult = await generateBGWPrivateKey(
+        recipientIndex,
+        undefined,
+        bgwState.data.publicKey
+      )
+
       // Determine Organization display value
       const finalOrg = formData.organization || formData.department || 'Consortium Hospital'
 
@@ -180,31 +198,47 @@ export default function EnrollmentWizard() {
       localStorage.setItem(`user_keys_${formData.name}`, JSON.stringify({
         userId: identityId,
         name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
         role: formData.role,
         organization: finalOrg,
         publicKey: keyPair.publicKey,
-        privateKey: keyPair.privateKey
+        privateKey: keyPair.privateKey,
+        bgwRecipientId: recipientIndex,
+        bgwPrivateKey: bgwPrivateKeyResult.data,
+        bgwPublicKey: bgwState.data.publicKey,
+        privacyLevel: securityLvl,
+        passwordSalt,
+        passwordHash
       }))
 
       // Save to registered users list
-      const existingUsers = JSON.parse(localStorage.getItem('registered_users') || '[]')
       existingUsers.push({
         userId: identityId,
         name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
         role: formData.role,
         organization: finalOrg,
-        publicKey: keyPair.publicKey
+        publicKey: keyPair.publicKey,
+        bgwRecipientId: recipientIndex,
+        privacyLevel: securityLvl,
+        passwordSalt,
+        passwordHash
       })
       localStorage.setItem('registered_users', JSON.stringify(existingUsers))
 
       const transactionData = {
-        txHash: mockTxHash,
-        blockNumber: Math.floor(Math.random() * 1000) + 500,
+        txHash: apiResult.data?.txId || apiResult.data?.transactionId || identityId,
+        blockNumber: apiResult.data?.blockNumber || 'Committed',
         status: 'SUCCESS',
         timestamp: new Date().toLocaleString(),
         name: formData.name,
         role: formData.role,
         organization: finalOrg,
+        email: formData.email,
+        passwordHash,
+        passwordSalt,
         identityId: identityId,
         publicKey: keyPair.publicKey
       }
@@ -561,7 +595,7 @@ export default function EnrollmentWizard() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold flex items-center gap-1">
-                      <Key className="w-3.5 h-3.5" /> Generated RSA-OAEP Public Key
+                      <Key className="w-3.5 h-3.5" /> Generated Registration Public Key
                     </span>
                     <button
                       onClick={() => handleCopyKey(txDetails.publicKey)}
@@ -587,7 +621,10 @@ export default function EnrollmentWizard() {
                         name: txDetails.name,
                         identityId: txDetails.identityId,
                         role: txDetails.role,
-                        organization: txDetails.organization
+                        organization: txDetails.organization,
+                        email: txDetails.email,
+                        passwordHash: txDetails.passwordHash,
+                        passwordSalt: txDetails.passwordSalt
                       }
                     })
                   }}

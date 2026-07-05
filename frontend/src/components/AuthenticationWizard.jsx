@@ -19,13 +19,14 @@ export default function AuthenticationWizard() {
   const [step, setStep] = useState(1)
   const [verifiedUser, setVerifiedUser] = useState(null)
   const [justEnrolledData, setJustEnrolledData] = useState(null)
+  const [credentialData, setCredentialData] = useState(null)
   const [stats, setStats] = useState({ identitiesCount: 142 })
 
   // Initialize checks for enrollment redirection & statistics
   useEffect(() => {
     try {
       const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
-      setStats({ identitiesCount: 142 + users.length })
+      setStats({ identitiesCount: users.length })
     } catch (e) {
       console.error(e)
     }
@@ -37,7 +38,9 @@ export default function AuthenticationWizard() {
         identityId,
         role,
         organization: location.state.organization || 'Consortium Hospital',
-        email: `${name.toLowerCase().replace(/\s+/g, '.')}@health.com`
+        email: location.state.email || JSON.parse(localStorage.getItem(`user_keys_${name}`) || '{}').email || '',
+        passwordHash: location.state.passwordHash || JSON.parse(localStorage.getItem(`user_keys_${name}`) || '{}').passwordHash,
+        passwordSalt: location.state.passwordSalt || JSON.parse(localStorage.getItem(`user_keys_${name}`) || '{}').passwordSalt
       }
       
       setJustEnrolledData(resolvedUser)
@@ -63,22 +66,20 @@ export default function AuthenticationWizard() {
   }
 
   const handleCredentialsSubmitted = async (data) => {
-    // Transition to step 5: Blockchain access timeline check
+    setCredentialData(data)
     setStep(5)
   }
 
   const handleVerificationCompleted = async () => {
     try {
       // Login with verified details
-      const email = verifiedUser.email || `${verifiedUser.name.toLowerCase().replace(/\s+/g, '.')}@health.com`
-      
-      // Call mock login
-      const loggedIn = await login(email, 'password123', verifiedUser.role)
+      const email = verifiedUser.email || verifiedUser.identityId
+      const loggedIn = await login(email, credentialData?.password || '', verifiedUser.role, verifiedUser)
       
       toast.success(`Welcome back, ${loggedIn.name}!`)
       navigate('/dashboard')
     } catch (error) {
-      toast.error('Blockchain validation failed: Session could not be created.')
+      toast.error(error.message || 'Blockchain validation failed: Session could not be created.')
       setStep(4) // Fallback to credentials screen
     }
   }
@@ -143,7 +144,7 @@ export default function AuthenticationWizard() {
               </p>
             </div>
 
-            {/* Simulated Clinical Graphic for Visual Interest */}
+            {/* Clinical network status graphic */}
             <div className="p-4 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/50 dark:border-slate-900 rounded-2xl flex items-center gap-4.5 max-w-md mx-auto lg:mx-0">
               <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-500 text-white rounded-xl shadow-md flex-shrink-0 animate-pulse">
                 <Activity className="w-6 h-6" />

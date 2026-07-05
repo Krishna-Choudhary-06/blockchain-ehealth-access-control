@@ -48,7 +48,9 @@ export default function IdentityLookup({ onIdentityFound }) {
             role: foundUser.role,
             organization: foundUser.organization || fullKeys.organization || 'Consortium Hub',
             email: fullKeys.email || 'user@health.com',
-            phone: fullKeys.phone || ''
+            phone: fullKeys.phone || '',
+            passwordHash: foundUser.passwordHash || fullKeys.passwordHash,
+            passwordSalt: foundUser.passwordSalt || fullKeys.passwordSalt
           })
         } else {
           setErrorMsg('Certificate Not Found: The specified identity is not registered on the Fabric channel.')
@@ -71,7 +73,7 @@ export default function IdentityLookup({ onIdentityFound }) {
       case 'email':
         return { icon: Mail, label: 'Registered Email', placeholder: 'e.g. doctor@hospital.com' }
       case 'username':
-        return { icon: User, label: 'Full Username', placeholder: 'e.g. Dr. Sarah Miller' }
+        return { icon: User, label: 'Full Username', placeholder: 'e.g. Dr Ram' }
       default:
         return { icon: Hash, label: 'ID', placeholder: 'e.g. UID-684718' }
     }

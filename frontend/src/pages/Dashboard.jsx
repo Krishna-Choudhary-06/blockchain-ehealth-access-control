@@ -5,13 +5,90 @@ import toast from 'react-hot-toast'
 import { 
   FiFileText, FiUserCheck, FiCpu, FiUsers, FiHardDrive, FiActivity,
   FiShield, FiSettings, FiUser, FiCheck, FiX, FiCopy, 
-  FiAlertTriangle, FiLock, FiUnlock, FiKey
+  FiAlertTriangle, FiLock, FiUnlock, FiKey, FiDownload, FiExternalLink
 } from 'react-icons/fi'
-import { decryptFile, decryptKeyForUser } from '../services/cryptoService'
-import { downloadFile } from '../services/ipfsService'
-import { getLogs } from '../services/apiService'
+import { getLogs, getDataRecords, getUsers, requestAccessAndDecrypt } from '../services/apiService'
 
+const TEST_PREFIXES = [
+  'doctor_paper_',
+  'doctor_full_',
+  'doctor_bgw_',
+  'record_paper_',
+  'record_full_',
+  'data_bgw_'
+]
 
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
+  } catch {
+    return fallback
+  }
+}
+
+function isTestArtifact(value = '') {
+  const text = String(value).toLowerCase()
+  return TEST_PREFIXES.some(prefix => text.startsWith(prefix)) || ['doctor1', 'record1'].includes(text)
+}
+
+function isRealLog(log) {
+  return !isTestArtifact(log.requesterId) && !isTestArtifact(log.dataId)
+}
+
+function isRealRecord(record) {
+  return !isTestArtifact(record.dataId || record.id)
+}
+
+function hasEncryptedPayload(record) {
+  return Boolean(record?.id && record?.ipfsHash && record?.payloadHash && record?.bgwHeader)
+}
+
+function isLocalRecordUsable(record) {
+  return isRealRecord(record) && hasEncryptedPayload(record)
+}
+
+function normalizeLogStatus(action = '') {
+  return String(action).toUpperCase() === 'GRANTED' ? 'Granted' : 'Denied'
+}
+
+function formatDateTime(value) {
+  if (!value) return 'N/A'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString()
+}
+
+function getCurrentUserKeys(user) {
+  if (!user?.name) return {}
+  return readJson(`user_keys_${user.name}`, {})
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return bytes
+}
+
+function getMimeType(fileName = '') {
+  const lower = fileName.toLowerCase()
+  if (lower.endsWith('.pdf')) return 'application/pdf'
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.json')) return 'application/json'
+  if (lower.endsWith('.txt') || lower.endsWith('.csv')) return 'text/plain'
+  return 'application/octet-stream'
+}
+
+function isTextMime(mimeType) {
+  return mimeType.startsWith('text/') || mimeType === 'application/json'
+}
+
+function safeCompare(value = '') {
+  return String(value).trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+}
 
 export default function Dashboard() {
   console.log("DASHBOARD COMPONENT RENDERED")
@@ -20,46 +97,22 @@ export default function Dashboard() {
   const location = useLocation()
   const hash = location.hash || ''
 
-  // Dynamic state metrics
-  const [blocksMined, setBlocksMined] = useState(412)
-  const [successReads, setSuccessReads] = useState(128)
-  const [pendingReqs, setPendingReqs] = useState(2)
-  const [networkUsers, setNetworkUsers] = useState(156)
-
-  // Access Logs Table mock state data
+  const [networkUsers, setNetworkUsers] = useState(() => readJson('registered_users', []).length)
+  const [fabricUsers, setFabricUsers] = useState([])
   const [accessLogs, setAccessLogs] = useState([])
-  // Simulated Patient Records (implementing Section 5)
-  const [patientRecords, setPatientRecords] = useState(() => {
-    const saved = localStorage.getItem('patient_records')
-    const uploaded = saved ? JSON.parse(saved) : []
-    const defaults = [
-      { id: 'PAT-8820', name: 'PAT-8820: Cardiology Report', sensitivity: 'L0', ipfsHash:   'QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco', uploadTime: '2026-06-10 13:42:01' },
-      { id: 'PAT-3491', name: 'PAT-3491: Blood Panel Analysis', sensitivity: 'L1', ipfsHash: 'QmYwAPJzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWp8xyz', uploadTime: '2026-06-10 12:44:59' },
-      { id: 'PAT-1092', name: 'PAT-1092: MRI Brain Scan', sensitivity: 'L2', ipfsHash: 'QmZpQRzvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWq9abc', uploadTime: '2026-06-10 13:12:44' },
-      { id: 'PAT-5420', name: 'PAT-5420: General Health Screening', sensitivity: 'L3', ipfsHash: 'QmT123zvHpXnN3WknFiJnKLwHCnL72vedxjQkDDP1mXWr0def', uploadTime: '2026-06-09 10:15:30' }
-    ]
-    const filteredDefaults = defaults.filter(d => !uploaded.some(u => u.id === d.id))
-    return [...uploaded, ...filteredDefaults]
-  })  // Simulated Patient Access History logs (implementing Section 4)
-  const [patientAccessHistory] = useState([
-    { id: 1, user: 'Doctor Amit', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:30 PM', status: 'Granted' },
-    { id: 2, user: 'Nurse Kelly Smith', action: 'Read Attempt', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '12:28 PM', status: 'Denied', reason: 'Role permissions restriction (L0)' },
-    { id: 3, user: 'Dr. Sarah Miller', action: 'Viewed File', file: 'PAT-8820: Cardiology Report', date: '10 June 2026', time: '11:15 AM', status: 'Granted' },
-    { id: 4, user: 'Lab Tech Dave', action: 'Accessed Report', file: 'PAT-3491: Blood Panel Analysis', date: '09 June 2026', time: '04:45 PM', status: 'Granted' },
-    { id: 5, user: 'Unknown Peer', action: 'Access Request', file: 'PAT-1092: MRI Brain Scan', date: '09 June 2026', time: '09:12 AM', status: 'Denied', reason: 'Consensus ABAC check failure' }
-  ])
+  const [patientRecords, setPatientRecords] = useState(() => readJson('patient_records', []).filter(isLocalRecordUsable))
 
   // Doctor Specific States (for decrypting files)
   const [selectedRecordToDecrypt, setSelectedRecordToDecrypt] = useState(null)
   const [decryptedContent, setDecryptedContent] = useState('')
+  const [decryptedFile, setDecryptedFile] = useState(null)
   const [isDecrypting, setIsDecrypting] = useState(false)
 
   // Settings state (Admin setting tuning parameters)
   const [settings, setSettings] = useState({
     keyLength: 'AES-256',
     consensusNodes: 4,
-    enforceMfa: true,
-    simulationSpeed: 3
+    enforceMfa: true
   })
 
   // copy to clipboard helper
@@ -73,71 +126,138 @@ export default function Dashboard() {
     setIsDecrypting(true)
     setSelectedRecordToDecrypt(record)
     setDecryptedContent('')
+    setDecryptedFile((previous) => {
+      if (previous?.url) URL.revokeObjectURL(previous.url)
+      return null
+    })
 
     try {
-      if (record.sharedKeys && record.ivHex) {
-        // Real client-side decryption flow!
-        const docKeysSaved = localStorage.getItem(`user_keys_${user.name}`)
-        if (!docKeysSaved) {
-          throw new Error(`RSA keys for ${user.name} not found in this client. Please register or re-login.`)
-        }
-        
-        const docKeys = JSON.parse(docKeysSaved)
-        const doctorUserId = docKeys.userId
-        const privateKey = docKeys.privateKey
-
-        const encryptedSymmetricKey = record.sharedKeys[doctorUserId]
-        if (!encryptedSymmetricKey) {
-          throw new Error(`Access Denied: You do not have security clearance for this record.`)
+      if (record.payloadHash && record.ipfsHash) {
+        const docKeys = getCurrentUserKeys(user)
+        if (!docKeys.userId) {
+          throw new Error(`BGW keys for ${user.name} not found in this client. Please enroll this identity first.`)
         }
 
-        const aesKeyHex = await decryptKeyForUser(encryptedSymmetricKey, privateKey)
-        const encryptedFileBuffer = await downloadFile(record.ipfsHash)
-        const decryptedFileBuffer = await decryptFile(encryptedFileBuffer, aesKeyHex, record.ivHex)
+        if (!docKeys.bgwPrivateKey) {
+          throw new Error(`BGW private key is missing for ${user.name}. Re-enroll the identity.`)
+        }
 
-        const dec = new TextDecoder()
-        const plaintext = dec.decode(decryptedFileBuffer)
-        setDecryptedContent(plaintext)
-      } else {
-        await new Promise(resolve => setTimeout(resolve, 1200))
-        setDecryptedContent(
-          record.id === 'PAT-8820'
-            ? "PATIENT: Alex Carter\nDIAGNOSIS: Stable Angina, coronary circulation normal.\nLABS: Cholesterol 185 mg/dL, HDL 48 mg/dL, LDL 112 mg/dL.\nPRESCRIPTIONS: Aspirin 75mg q.d., Atorvastatin 20mg q.d.\nSTATUS: Checked by Dr. Sarah Miller. Condition stable."
-            : record.id === 'PAT-3491'
-            ? "PATIENT: Alice Johnson\nRESULTS: Fasting Blood Glucose: 92 mg/dL, HbA1c: 5.4% (Normal range).\nREMARKS: Metabolic profiles stable. Recommended annual review."
-            : "PATIENT: Bob Smith\nDIAGNOSIS: Brain MRI displays no focal space-occupying lesions or vascular malformations.\nREMARKS: Symptoms indicate chronic migraine. Treatment protocol initiated."
+        const response = await requestAccessAndDecrypt(
+          docKeys.userId,
+          record.id,
+          docKeys.bgwPrivateKey,
+          docKeys.bgwPublicKey
         )
+        if (!response.success) {
+          throw new Error(response.error || response.access?.message || 'Access denied by Fabric policy.')
+        }
+        const fileName = record.fileName || record.file || record.name || `${record.id}.bin`
+        const mimeType = getMimeType(fileName)
+        const bytes = base64ToBytes(response.data)
+        if (isTextMime(mimeType)) {
+          setDecryptedContent(new TextDecoder().decode(bytes))
+        } else {
+          const blob = new Blob([bytes], { type: mimeType })
+          setDecryptedFile({
+            name: fileName,
+            type: mimeType,
+            size: bytes.byteLength,
+            url: URL.createObjectURL(blob)
+          })
+        }
+      } else {
+        throw new Error('This record was not uploaded through the BGW/IPFS workflow, so there is no encrypted payload to decrypt.')
       }
     } catch (error) {
       console.error(error)
       toast.error(`Decryption failed: ${error.message}`)
       setDecryptedContent(`[ERROR] Decryption process terminated.\nReason: ${error.message}`)
+      setDecryptedFile(null)
     } finally {
       setIsDecrypting(false)
     }
   }
 
+  useEffect(() => {
+    return () => {
+      if (decryptedFile?.url) URL.revokeObjectURL(decryptedFile.url)
+    }
+  }, [decryptedFile])
+
+  const registeredUsers = readJson('registered_users', [])
+  const currentKeys = getCurrentUserKeys(user)
+  const currentUserId = user?.identityId || currentKeys.userId || ''
+  const isOwnedByCurrentPatient = (record) => {
+    if (role !== 'Patient') return true
+    const normalizedName = safeCompare(user?.name)
+    return (
+      record.ownerId === currentUserId ||
+      record.patientId === currentUserId ||
+      safeCompare(record.patientName) === normalizedName ||
+      safeCompare(record.patientId) === safeCompare(currentUserId)
+    )
+  }
+  const visibleRecords = patientRecords.filter(isOwnedByCurrentPatient)
+  const visibleRecordIds = new Set(visibleRecords.map(record => record.id))
+  const relevantAccessLogs = role === 'Patient'
+    ? accessLogs.filter(log => visibleRecordIds.has(log.dataId))
+    : accessLogs
+  const displayedAccessLogs = role === 'Patient' ? relevantAccessLogs : accessLogs
+  const deniedLogs = relevantAccessLogs.filter(log => normalizeLogStatus(log.action) === 'Denied')
+  const successfulReads = accessLogs.filter(log =>
+    normalizeLogStatus(log.action) === 'Granted' &&
+    (!currentKeys.userId || log.requesterId === currentKeys.userId || log.requesterId === user?.identityId)
+  ).length
+  const authorizedClinicalUsers = registeredUsers.filter(item => ['Doctor', 'Nurse', 'Lab', 'Staff'].includes(item.role)).length
+  const accessibleRecords = visibleRecords.filter(record => {
+    if (!record.authorizedUsers?.length) return true
+    return currentKeys.userId ? record.authorizedUsers.includes(currentKeys.userId) : false
+  })
+  const assignedPatients = new Set(accessibleRecords.map(record => record.patientName || record.patientId).filter(Boolean)).size
+  const patientAccessHistory = relevantAccessLogs.map((log, index) => {
+    const date = new Date(log.time)
+    const knownRecord = visibleRecords.find(record => record.id === log.dataId)
+    return {
+      id: `${log.requesterId}-${log.dataId}-${log.time}-${index}`,
+      user: log.requesterId,
+      action: log.action,
+      file: knownRecord?.name || log.dataId,
+      date: Number.isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString(),
+      time: Number.isNaN(date.getTime()) ? log.time : date.toLocaleTimeString(),
+      status: normalizeLogStatus(log.action)
+    }
+  })
+  const currentUserLogs = accessLogs.filter(log =>
+    !currentKeys.userId || log.requesterId === currentKeys.userId || log.requesterId === user?.identityId
+  )
+  const currentUserInitials = (user?.name || 'User')
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
   // Stat cards configurations based on active role
   const statCards = {
     Patient: [
-      { id: 1, label: 'My Enrolled Files', value: `${patientRecords.length}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
-      { id: 2, label: 'Authorized Doctors', value: '3', icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
-      { id: 3, label: 'Active Access Requests', value: `${pendingReqs > 0 ? pendingReqs + ' Pending' : 'None'}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
+      { id: 1, label: 'My Enrolled Files', value: `${visibleRecords.length}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
+      { id: 2, label: 'Authorized Clinical Users', value: `${authorizedClinicalUsers}`, icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
+      { id: 3, label: 'Denied Access Attempts', value: `${deniedLogs.length}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
     ],
     Doctor: [
-      { id: 1, label: 'Assigned Patients', value: '3', icon: FiUsers, color: 'text-blue-600 bg-blue-500/10' },
-      { id: 2, label: 'Requests Pending', value: `${pendingReqs}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' },
-      { id: 3, label: 'Successful File Reads', value: `${successReads}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' }
+      { id: 1, label: 'Assigned Patients', value: `${assignedPatients}`, icon: FiUsers, color: 'text-blue-600 bg-blue-500/10' },
+      { id: 2, label: 'Accessible Records', value: `${accessibleRecords.length}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' },
+      { id: 3, label: 'Successful File Reads', value: `${successfulReads}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' }
     ],
     Nurse: [
-      { id: 1, label: 'Lab Reports Accessible', value: '12', icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
-      { id: 2, label: 'Access Requests Granted', value: '34', icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
-      { id: 3, label: 'Pending Action Items', value: `${pendingReqs}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
+      { id: 1, label: 'Reports Accessible', value: `${accessibleRecords.length}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
+      { id: 2, label: 'Access Requests Granted', value: `${successfulReads}`, icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
+      { id: 3, label: 'Denied Requests', value: `${deniedLogs.length}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
     ],
     Admin: [
       { id: 1, label: 'Peer Nodes Connected', value: '4 / 4', icon: FiCpu, color: 'text-emerald-600 bg-emerald-500/10' },
       { id: 2, label: 'Registered Network Users', value: `${networkUsers}`, icon: FiUsers, color: 'text-purple-600 bg-purple-500/10' },
-      { id: 3, label: 'Total Blocks Mined', value: `${blocksMined}`, icon: FiHardDrive, color: 'text-blue-600 bg-blue-500/10' }
+      { id: 3, label: 'Access Log Entries', value: `${accessLogs.length}`, icon: FiHardDrive, color: 'text-blue-600 bg-blue-500/10' }
     ]
   }
 
@@ -146,15 +266,13 @@ export default function Dashboard() {
   const loadLogs = async () => {
     try {
       const response = await getLogs()
-      console.log("LOG RESPONSE", response)
       if (response.success) {
         setAccessLogs(
-  response.data.sort(
+  response.data.filter(isRealLog).sort(
     (a, b) => new Date(b.time) - new Date(a.time)
   )
 )
       }
-      console.log("BLOCKCHAIN LOGS:", response.data)
     } catch (err) {
       console.error('Failed to load logs', err)
     }
@@ -162,56 +280,63 @@ export default function Dashboard() {
 
   loadLogs()
 }, [])
-  // Set up refresh simulation loop
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      const docNames = ['Dr. Sarah Miller', 'Dr. James Watson', 'Dr. Helen Cho', 'Dr. Robert Carter', 'Dr. Emily Vance']
-      const nurseNames = ['Nurse Kelly Smith', 'Nurse John Davis', 'Nurse Clara Barton']
-      const patientNames = ['Patient Alex Carter', 'Patient Alice Johnson', 'Patient Bob Smith']
-      const roles = ['Doctor', 'Nurse', 'Patient']
-      
-      const chosenRole = roles[Math.floor(Math.random() * roles.length)]
-      let user
-      let action
-      let status
-
-      if (chosenRole === 'Doctor') {
-        user = docNames[Math.floor(Math.random() * docNames.length)]
-        action = `Read File PAT-${Math.floor(1000 + Math.random() * 9000)}`
-        status = Math.random() > 0.15 ? 'Granted' : 'Denied'
-      } else if (chosenRole === 'Nurse') {
-        user = nurseNames[Math.floor(Math.random() * nurseNames.length)]
-        action = `Read File PAT-${Math.floor(1000 + Math.random() * 9000)}`
-        status = Math.random() > 0.7 ? 'Granted' : 'Denied'
-      } else {
-        user = patientNames[Math.floor(Math.random() * patientNames.length)]
-        action = `Read File PAT-${Math.floor(1000 + Math.random() * 9000)}`
-        status = 'Granted'
+    const loadUsers = async () => {
+      const localUsers = readJson('registered_users', [])
+      try {
+        const response = await getUsers()
+        if (response.success && Array.isArray(response.data)) {
+          setFabricUsers(response.data)
+          setNetworkUsers(Math.max(localUsers.length, response.data.filter(user => !isTestArtifact(user.userId)).length))
+          return
+        }
+      } catch (err) {
+        console.error('Failed to load Fabric users', err)
       }
+      setNetworkUsers(localUsers.length)
+    }
 
-      const newLog = {
-        id: Date.now(),
-        user,
-        role: chosenRole,
-        action,
-        status,
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19)
+    loadUsers()
+  }, [])
+
+  useEffect(() => {
+    const loadDataRecords = async () => {
+      try {
+        const response = await getDataRecords()
+        if (response.success && Array.isArray(response.data)) {
+          const chainRecords = response.data.filter(isRealRecord).map(record => ({
+            id: record.dataId,
+            name: `${record.dataId}: ${record.metadata?.filename || record.category || 'Medical Record'}`,
+            sensitivity: record.requiredLevel,
+            category: record.category,
+            ipfsHash: record.ipfsHash,
+            payloadHash: record.payloadHash,
+            bgwHeader: record.bgwHeader,
+            authorizedUsers: record.authorizedUsers || [],
+            uploadTime: record.storedAt,
+            patientName: record.patientId,
+            patientId: record.patientId,
+            ownerId: record.metadata?.ownerId,
+            uploadedBy: record.metadata?.uploadedBy,
+            uploaderRole: record.metadata?.uploaderRole,
+            fileName: record.metadata?.filename || record.dataId,
+            encryptionStatus: 'BGW Broadcast Encryption + AES-256-GCM'
+          }))
+          const saved = readJson('patient_records', []).filter(isLocalRecordUsable)
+          localStorage.setItem('patient_records', JSON.stringify(saved))
+          const merged = [
+            ...chainRecords,
+            ...saved.filter(local => !chainRecords.some(chain => chain.id === local.id))
+          ]
+          setPatientRecords(merged)
+        }
+      } catch (err) {
+        console.error('Failed to load Fabric data records', err)
       }
+    }
 
-      // setAccessLogs(prev => [newLog, ...prev].slice(0, 6))
-      setBlocksMined(prev => prev + 1)
-      if (status === 'Granted' && chosenRole === 'Doctor') {
-        setSuccessReads(prev => prev + 1)
-      }
-      setPendingReqs(Math.floor(Math.random() * 4))
-      
-      if (Math.random() > 0.8) {
-        setNetworkUsers(prev => prev + 1)
-      }
-
-    }, 3000)
-
-    return () => clearInterval(interval)
+    loadDataRecords()
   }, [])
 
   // Helper check for clearance badges (implementing Section 5 Access Matrix)
@@ -264,43 +389,34 @@ export default function Dashboard() {
             <h3 className="text-sm font-bold text-red-700 dark:text-rose-400 uppercase tracking-wider">Security Threat Intelligence & Alerts</h3>
           </div>
           <span className="px-2.5 py-0.5 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-rose-400 text-[9px] font-bold rounded-full animate-pulse uppercase tracking-wide">
-            Attacks Intercepted
+            {deniedLogs.length} Denied
           </span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-850 p-4 rounded-2xl flex items-start space-x-3 shadow-sm hover:border-red-500/30 dark:hover:border-rose-900/40 transition-all">
-            <FiAlertTriangle className="text-amber-500 w-5 h-5 flex-shrink-0 mt-0.5 animate-bounce" />
-            <div>
-              <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200">Suspicious Access Detected</h4>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                Unknown peer signature check requested access to Patient Alex Carter's private ledger directory.
-              </p>
-              <span className="text-[9px] font-mono text-red-500 dark:text-rose-400 block mt-2 font-bold">IPFS Hash: QmXoypizjW3...</span>
+          {deniedLogs.length === 0 && (
+            <div className="md:col-span-3 bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-850 p-4 rounded-2xl flex items-start space-x-3 shadow-sm">
+              <FiShield className="text-emerald-500 w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200">No Denied Access Attempts</h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  The current ledger view does not contain rejected ABAC/BGW access attempts.
+                </p>
+              </div>
             </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-850 p-4 rounded-2xl flex items-start space-x-3 shadow-sm hover:border-red-500/30 dark:hover:border-rose-900/40 transition-all">
-            <FiAlertTriangle className="text-rose-500 w-5 h-5 flex-shrink-0 mt-0.5 animate-bounce" />
-            <div>
-              <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200">Multiple Failed Attempts</h4>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                3 failed cryptographic verification checking requests detected from peer node NIT-HOSP-3 within 15 seconds.
-              </p>
-              <span className="text-[9px] font-mono text-red-500 dark:text-rose-400 block mt-2 font-bold">Node ID: peer0.nit.com</span>
+          )}
+          {deniedLogs.slice(0, 3).map(log => (
+            <div key={`${log.requesterId}-${log.dataId}-${log.time}-alert`} className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-850 p-4 rounded-2xl flex items-start space-x-3 shadow-sm hover:border-red-500/30 dark:hover:border-rose-900/40 transition-all">
+              <FiAlertTriangle className="text-red-600 w-5 h-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200">Access Denied By Policy</h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                  {log.requesterId} requested {log.dataId}; requester level {log.requesterLevel || 'N/A'} did not satisfy data level {log.dataLevel || 'N/A'}.
+                </p>
+                <span className="text-[9px] font-mono text-red-500 dark:text-rose-400 block mt-2 font-bold">{formatDateTime(log.time)}</span>
+              </div>
             </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-850 p-4 rounded-2xl flex items-start space-x-3 shadow-sm hover:border-red-500/30 dark:hover:border-rose-900/40 transition-all">
-            <FiAlertTriangle className="text-red-600 w-5 h-5 flex-shrink-0 mt-0.5 animate-bounce" />
-            <div>
-              <h4 className="text-xs font-bold text-slate-850 dark:text-slate-200">Unauthorized Access Attempt</h4>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                Nurse Kelly Smith requested access to L0 record PAT-8820. Attribute check denied (ABAC Policy restrict).
-              </p>
-              <span className="text-[9px] font-mono text-red-500 dark:text-rose-400 block mt-2 font-bold">Status Code: 403 (Forbidden)</span>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -324,7 +440,14 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-355 text-xs">
-              {accessLogs.map((log) => (
+              {displayedAccessLogs.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-6 text-center text-slate-450 dark:text-slate-500">
+                    No Fabric access logs are available for registered application activity yet.
+                  </td>
+                </tr>
+              )}
+              {displayedAccessLogs.map((log) => (
                 <tr
   key={`${log.requesterId}-${log.dataId}-${log.time}`}
   className="hover:bg-slate-50/50 dark:hover:bg-slate-955/20 transition-colors"
@@ -370,7 +493,12 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        {patientRecords.map((record) => (
+        {visibleRecords.length === 0 && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm text-sm text-slate-500 dark:text-slate-400">
+            No medical records have been uploaded through the BGW/IPFS workflow yet.
+          </div>
+        )}
+        {visibleRecords.map((record) => (
           <div key={record.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
@@ -452,6 +580,13 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
+              {patientAccessHistory.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-6 text-center text-slate-450 dark:text-slate-500">
+                    No access history has been committed for your records yet.
+                  </td>
+                </tr>
+              )}
               {patientAccessHistory.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
                   <td className="py-4 pl-2 font-semibold text-slate-955 dark:text-white flex items-center gap-1.5">
@@ -483,29 +618,13 @@ export default function Dashboard() {
   // 4. DOCTOR RECORDS LIST
   const renderDoctorRecords = () => {
     // Map patient records to Doctor's workspace records
-    const doctorPatients = patientRecords.map(rec => {
-      let authorized = true
-      if (rec.sharedKeys) {
-        // Real record: check if Doctor's key is present
-        const docKeysSaved = localStorage.getItem(`user_keys_${user.name}`)
-        if (docKeysSaved) {
-          const docKeys = JSON.parse(docKeysSaved)
-          authorized = !!rec.sharedKeys[docKeys.userId]
-        } else {
-          authorized = false
-        }
-      } else {
-        // Static defaults fallback
-        if (rec.id === 'PAT-7720') {
-          authorized = false
-        }
-      }
+    const doctorPatients = accessibleRecords.map(rec => {
       return {
         id: rec.id,
-        patient: rec.patientName || 'Alex Carter',
+        patient: rec.patientName || rec.patientId || 'Registered patient',
         file: rec.fileName || rec.name,
         sensitivity: rec.sensitivity,
-        authorized: authorized,
+        authorized: true,
         rawRecord: rec
       }
     })
@@ -521,25 +640,23 @@ export default function Dashboard() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Accessible Ledger Files</h3>
             <div className="divide-y divide-slate-100 dark:divide-slate-800/40 space-y-3">
+              {doctorPatients.length === 0 && (
+                <div className="pt-3 text-xs text-slate-500 dark:text-slate-400">
+                  No uploaded BGW/IPFS records are available for this identity yet.
+                </div>
+              )}
               {doctorPatients.map((rec) => (
                 <div key={rec.id} className="pt-3 flex items-center justify-between gap-3 first:pt-0">
                   <div>
                     <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">{rec.file}</h4>
                     <span className="text-[10px] text-slate-450 block">Patient: {rec.patient} | Sensitivity: {rec.sensitivity}</span>
                   </div>
-                  {rec.authorized ? (
-                    <button 
-                      onClick={() => handleDecrypt(rec.rawRecord || rec)}
-                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-purple-600/10 cursor-pointer"
-                    >
-                      Decrypt & Read
-                    </button>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
-                      <FiLock className="w-3 h-3" />
-                      Locked
-                    </span>
-                  )}
+                  <button 
+                    onClick={() => handleDecrypt(rec.rawRecord || rec)}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-purple-600/10 cursor-pointer"
+                  >
+                    Decrypt & Read
+                  </button>
                 </div>
               ))}
             </div>
@@ -556,7 +673,7 @@ export default function Dashboard() {
               {selectedRecordToDecrypt ? (
                 <div className="space-y-4">
                   <div>
-                    <span className="text-purple-400">Target File:</span> {selectedRecordToDecrypt.file}
+                    <span className="text-purple-400">Target File:</span> {selectedRecordToDecrypt.file || selectedRecordToDecrypt.fileName || selectedRecordToDecrypt.name}
                   </div>
                   <div>
                     <span className="text-purple-400">Ledger ID:</span> {selectedRecordToDecrypt.id}
@@ -571,24 +688,55 @@ export default function Dashboard() {
                     <div className="space-y-2">
                       <div className="text-emerald-455 flex items-center gap-1.5 font-bold">
                         <FiUnlock className="w-4 h-4" />
-                        Permissions Validated. Plaintext output:
+                        Permissions validated. Decrypted payload recovered:
                       </div>
-                      <pre className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-slate-300">
-                        {decryptedContent}
-                      </pre>
+                      {decryptedFile ? (
+                        <div className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl space-y-3 text-slate-300">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="font-bold text-slate-100">{decryptedFile.name}</div>
+                              <div className="text-[10px] text-slate-500">{decryptedFile.type} • {(decryptedFile.size / 1024).toFixed(1)} KB</div>
+                            </div>
+                            <FiFileText className="w-5 h-5 text-purple-400 flex-shrink-0" />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <a
+                              href={decryptedFile.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-bold"
+                            >
+                              <FiExternalLink className="w-3.5 h-3.5" />
+                              Open File
+                            </a>
+                            <a
+                              href={decryptedFile.url}
+                              download={decryptedFile.name}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg text-[11px] font-bold"
+                            >
+                              <FiDownload className="w-3.5 h-3.5" />
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        <pre className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-slate-300">
+                          {decryptedContent}
+                        </pre>
+                      )}
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-2">
                   <FiKey className="w-8 h-8 text-slate-600" />
-                  <span>Select an authorized ledger file to initiate client-side decryption.</span>
+                      <span>Select an authorized ledger file to initiate Fabric-gated BGW decryption.</span>
                 </div>
               )}
             </div>
             {selectedRecordToDecrypt && !isDecrypting && (
               <div className="text-[10px] text-slate-550 border-t border-slate-900 pt-3 mt-4">
-                * Encrypted with AES-256 using ledger key indices.
+                * Fabric authorized the request, IPFS hash was verified, and BGW recovered the payload key.
               </div>
             )}
           </div>
@@ -617,22 +765,31 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
-              <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
-                <td className="py-4 pl-2 font-mono text-[10px] uppercase">Read File</td>
-                <td className="py-4">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-455 border border-emerald-500/20">Granted</span>
-                </td>
-                <td className="py-4 font-semibold">PAT-8820: Cardiology Report</td>
-                <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550">2026-06-10 13:42:01</td>
-              </tr>
-              <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-955/20 transition-colors">
-                <td className="py-4 pl-2 font-mono text-[10px] uppercase">Read File</td>
-                <td className="py-4">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-455 border border-emerald-500/20">Granted</span>
-                </td>
-                <td className="py-4 font-semibold">PAT-3491: Blood Panel Analysis</td>
-                <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550">2026-06-10 12:44:59</td>
-              </tr>
+              {currentUserLogs.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="py-6 text-center text-slate-450 dark:text-slate-500">
+                    No access requests have been recorded for this identity yet.
+                  </td>
+                </tr>
+              )}
+              {currentUserLogs.map(log => {
+                const status = normalizeLogStatus(log.action)
+                const record = patientRecords.find(item => item.id === log.dataId)
+                return (
+                  <tr key={`${log.requesterId}-${log.dataId}-${log.time}-personal`} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
+                    <td className="py-4 pl-2 font-mono text-[10px] uppercase">{log.action}</td>
+                    <td className="py-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        status === 'Granted'
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-455 border-emerald-500/20'
+                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
+                      }`}>{status}</span>
+                    </td>
+                    <td className="py-4 font-semibold">{record?.name || log.dataId}</td>
+                    <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550">{formatDateTime(log.time)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -642,11 +799,13 @@ export default function Dashboard() {
 
   // 6. NURSE ACCESS LAB REPORTS
   const renderNurseLabReports = () => {
-    const nurseRecords = [
-      { id: 'PAT-3491', patient: 'Alice Johnson', file: 'Blood Panel Analysis', sensitivity: 'L1', allowed: false },
-      { id: 'PAT-9912', patient: 'Bob Smith', file: 'Brain MRI Scan', sensitivity: 'L2', allowed: true },
-      { id: 'PAT-5420', patient: 'Charlie Green', file: 'General Health Screening', sensitivity: 'L3', allowed: true }
-    ]
+    const nurseRecords = patientRecords.map(record => ({
+      id: record.id,
+      patient: record.patientName || record.patientId || 'Registered patient',
+      file: record.fileName || record.name,
+      sensitivity: record.sensitivity,
+      allowed: record.authorizedUsers?.length ? record.authorizedUsers.includes(currentKeys.userId) : getRoleAccess(record.sensitivity, 'Nurse')
+    }))
 
     return (
       <div className="space-y-8">
@@ -668,6 +827,13 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
+                {nurseRecords.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="py-6 text-center text-slate-450 dark:text-slate-500">
+                      No uploaded lab or patient records are available yet.
+                    </td>
+                  </tr>
+                )}
                 {nurseRecords.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
                     <td className="py-4 pl-2 font-semibold text-slate-900 dark:text-white">{item.file}</td>
@@ -689,7 +855,7 @@ export default function Dashboard() {
                     <td className="py-4 text-right pr-2">
                       {item.allowed ? (
                         <button 
-                          onClick={() => toast.success(`Viewing ${item.file}... (Simulated)`)}
+                          onClick={() => toast.success(`Access allowed for ${item.file}. Use the decrypt workflow for encrypted payload retrieval.`)}
                           className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[11px] font-bold cursor-pointer"
                         >
                           View Report
@@ -728,14 +894,30 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-355 text-xs">
-              <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
-                <td className="py-4 pl-2 font-mono text-[10px]">Read File</td>
-                <td className="py-4">
-                  <span className="text-[10px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full">Denied</span>
-                </td>
-                <td className="py-4 font-semibold">PAT-8820: Cardiology Report</td>
-                <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550">2026-06-10 13:40:15</td>
-              </tr>
+              {currentUserLogs.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="py-6 text-center text-slate-450 dark:text-slate-500">
+                    No nurse access history has been committed for this identity yet.
+                  </td>
+                </tr>
+              )}
+              {currentUserLogs.map(log => {
+                const status = normalizeLogStatus(log.action)
+                return (
+                  <tr key={`${log.requesterId}-${log.dataId}-${log.time}-nurse`} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
+                    <td className="py-4 pl-2 font-mono text-[10px]">{log.action}</td>
+                    <td className="py-4">
+                      <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${
+                        status === 'Granted'
+                          ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20'
+                          : 'text-rose-500 bg-rose-500/10 border-rose-500/20'
+                      }`}>{status}</span>
+                    </td>
+                    <td className="py-4 font-semibold">{log.dataId}</td>
+                    <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550">{formatDateTime(log.time)}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -745,12 +927,25 @@ export default function Dashboard() {
 
   // 8. ADMIN USER MANAGEMENT
   const renderAdminUsers = () => {
+    const localUsers = readJson('registered_users', [])
+    const localUserIds = new Set(localUsers.map(item => item.userId))
     const adminUsersList = [
-      { name: 'Dr. Sarah Miller', role: 'Doctor', org: 'NIT JAMSHEDPUR', status: 'Active', cert: '0x8823f99011de' },
-      { name: 'Patient Alex Carter', role: 'Patient', org: 'Self', status: 'Active', cert: '0x1092aa88f912' },
-      { name: 'Nurse Kelly Smith', role: 'Nurse', org: 'NIT JAMSHEDPUR', status: 'Active', cert: '0x5532ab99f831' },
-      { name: 'Doctor Amit', role: 'Doctor', org: 'General Ward', status: 'Active', cert: '0x3219fb00e234' },
-      { name: 'Unauthorized Intruder', role: 'External', org: 'Malicious Peer', status: 'Revoked', cert: '0xbaad9923ffee' }
+      ...localUsers.map(item => ({
+        name: item.name,
+        role: item.role,
+        org: item.organization || '',
+        status: 'Active',
+        cert: item.userId || item.publicKey?.slice(0, 16) || 'N/A'
+      })),
+      ...fabricUsers
+        .filter(item => item.userId && !localUserIds.has(item.userId) && !isTestArtifact(item.userId))
+        .map(item => ({
+          name: item.userId,
+          role: item.role || 'Member',
+          org: item.organization || '',
+          status: item.revoked ? 'Revoked' : 'Active',
+          cert: item.userId
+        }))
     ]
 
     return (
@@ -773,6 +968,13 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
+                {adminUsersList.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="py-6 text-center text-slate-450 dark:text-slate-500">
+                      No enrolled identities are available yet.
+                    </td>
+                  </tr>
+                )}
                 {adminUsersList.map((usr, i) => (
                   <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
                     <td className="py-4 pl-2 font-semibold text-slate-900 dark:text-white">{usr.name}</td>
@@ -1048,11 +1250,9 @@ export default function Dashboard() {
           <div className="lg:col-span-6 space-y-6">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-6">
               <div className="flex items-center space-x-4">
-                <img 
-                  src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80'} 
-                  alt={user?.name} 
-                  className="w-16 h-16 rounded-2xl border border-slate-200 dark:border-slate-800 object-cover shadow-sm"
-                />
+                <div className="w-16 h-16 rounded-2xl border border-slate-200 dark:border-slate-800 bg-purple-600/10 text-purple-600 dark:text-purple-300 flex items-center justify-center text-lg font-black shadow-sm">
+                  {currentUserInitials}
+                </div>
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-white">{user?.name || 'Guest User'}</h3>
                   <span className="text-xs font-semibold text-purple-600 dark:text-purple-405 bg-purple-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider font-mono inline-block mt-1">
