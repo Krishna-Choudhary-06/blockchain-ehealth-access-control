@@ -31,11 +31,10 @@ class DataAccess extends Contract {
         }
 
         const broadcastHeader = dataRecord.broadcastHeader || {};
-        const encryptedKeyForRequester = broadcastHeader[requesterId];
-        if (!encryptedKeyForRequester) {
-            await this._logAccess(ctx, requesterId, dataId, 'REVOKED', 'Not in authorized set');
-            return JSON.stringify({ status: 'ACCESS_DENIED', message: 'You are not in the authorized set for this data record. Contact the patient to be added.', ipfsHash: null });
-        }
+        
+        // BGW provides cryptographic access control. 
+        // If a user is not in the authorized set, their BLS12-381 private key will simply fail to decrypt the AES key.
+        // The chaincode only enforces role/privacy levels.
 
         await this._logAccess(ctx, requesterId, dataId, 'GRANTED', '');
         return JSON.stringify({
@@ -44,7 +43,8 @@ class DataAccess extends Contract {
             patientId:          dataRecord.patientId,
             ipfsHash:           dataRecord.ipfsHash,
             iv:                 dataRecord.iv,
-            encryptedKeyForYou: encryptedKeyForRequester,
+            broadcastHeader:    broadcastHeader,
+            authorizedUsers:    broadcastHeader.recipientIds || [],
             accessGrantedAt:    this._getTimestamp(ctx)
         });
     }
@@ -75,16 +75,21 @@ class DataAccess extends Contract {
     _getTimestamp(ctx) {
         try {
             const ts = ctx.stub.getTxTimestamp();
-            if (ts && ts.seconds) {
-                const secs = ts.seconds.low !== undefined
-                    ? ts.seconds.low
-                    : parseInt(ts.seconds.toString());
-                return new Date(secs * 1000).toISOString();
+            if (ts) {
+                if (typeof ts.toDate === 'function') {
+                    return ts.toDate().toISOString();
+                } else if (ts.seconds) {
+                    const secs = ts.seconds.low !== undefined ? ts.seconds.low : parseInt(ts.seconds.toString());
+                    return new Date(secs * 1000).toISOString();
+                } else if (ts.getTime) {
+                    return new Date(ts.getTime()).toISOString();
+                }
             }
-            return new Date().toISOString();
         } catch(e) {
-            return new Date().toISOString();
+            // Log silently
         }
+        // Deterministic fallback to prevent "Peer endorsements do not match"
+        return '1970-01-01T00:00:00.000Z';
     }
 }
 

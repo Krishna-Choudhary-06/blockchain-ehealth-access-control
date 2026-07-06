@@ -2,160 +2,86 @@
 /**
  * ============================================================
  * broadcastService.js
- * Blockchain E-Health Access Control System
+ * Blockchain E-Health Access Control System - BGW05 Integrated
  * ============================================================
  *
  * PURPOSE:
- *   Implements broadcast encryption for secure AES key distribution.
- *   Drop this file into: app/services/broadcastService.js
+ *   Implements true broadcast encryption using the BGW05 library.
  *
  * HOW IT WORKS:
- *   1. One AES key K encrypts the actual medical file
- *   2. K is RSA-encrypted once per authorized user → broadcast header
- *   3. On access grant, user gets THEIR encrypted copy of K
- *   4. User decrypts with their RSA private key → recovers K
- *   5. Revocation = remove user's entry from header (no re-encryption)
- *
- * DEPENDS ON: Node.js built-in 'crypto' only (no npm install needed)
+ *   1. Setup Phase: Admin generates PK (Public Key/Params) and MSK (Master Secret Key).
+ *   2. Keygen: Each user gets a unique private key SK_u derived from MSK.
+ *   3. Encrypt: BGW generates a symmetric key (K) and a broadcast header (H) for a set of users S.
+ *   4. File is encrypted with K. H is stored on chain.
+ *   5. Decrypt: Authorized user downloads H and S, uses their SK_u to recover K.
  * ============================================================
  */
 
+// Assuming the user's BGW library is placed in the bgw folder at the app root.
+const bgw = require('../bgw/index.js');
 const crypto = require('crypto');
 
 /**
- * Build a broadcast header for a set of authorized users.
- *
- * @param {Buffer} aesKey        - The AES-256 key to protect (32 bytes)
- * @param {Array}  authorizedUsers - Array of { userId, publicKey } objects
- *                                   publicKey must be RSA PEM format
- * @returns {Object} broadcastHeader - { userId: base64EncryptedKey, ... }
- *
- * Example:
- *   const header = buildBroadcastHeader(K, [
- *     { userId: 'doc_bob',   publicKey: '-----BEGIN RSA PUBLIC KEY-----...' },
- *     { userId: 'doc_carol', publicKey: '-----BEGIN RSA PUBLIC KEY-----...' }
- *   ]);
- *   // Returns: { doc_bob: "X9kL3m...", doc_carol: "7hN2wQ..." }
+ * Build a broadcast header for a set of authorized users using BGW.
+ * 
+ * @param {Array} authorizedUsers - Array of user ID strings
+ * @param {Object} pk - BGW Public Parameters
+ * @returns {Object} { symmetricKey (Buffer), broadcastHeader (Object) }
  */
-function buildBroadcastHeader(aesKey, authorizedUsers) {
-    if (!Buffer.isBuffer(aesKey) || aesKey.length !== 32) {
-        throw new Error('aesKey must be a 32-byte Buffer');
-    }
+function buildBroadcastHeader(authorizedUsers, pk) {
     if (!Array.isArray(authorizedUsers) || authorizedUsers.length === 0) {
         throw new Error('authorizedUsers must be a non-empty array');
     }
-
-    const header = {};
-
-    for (const user of authorizedUsers) {
-        if (!user.userId || !user.publicKey) {
-            console.warn(`Skipping user with missing userId or publicKey`);
-            continue;
-        }
-        try {
-            const encryptedKey = crypto.publicEncrypt(
-                user.publicKey,
-                aesKey
-            );
-            header[user.userId] = encryptedKey.toString('base64');
-        } catch (err) {
-            console.error(`Failed to encrypt key for ${user.userId}:`, err.message);
-        }
-    }
-
-    return header;
+    
+    // The BGW library encrypt function should return a symmetric key and a header
+    const { key, header } = bgw.encrypt(pk, authorizedUsers);
+    
+    return {
+        symmetricKey: Buffer.from(key, 'hex'), // 32 bytes AES key
+        broadcastHeader: header
+    };
 }
 
 /**
  * Recover the AES key from a broadcast header using a private key.
- * Called on the DOCTOR/USER side after receiving ACCESS_GRANTED.
- *
- * @param {string} encryptedKeyBase64 - The user's encrypted key from the header
- * @param {string} privateKeyPem      - RSA private key in PEM format
+ * 
+ * @param {Object} broadcastHeader - The BGW header
+ * @param {Array} authorizedUsers - Array of user IDs
+ * @param {Object} privateKey - BGW private key of the requester
+ * @param {Object} pk - BGW Public Parameters
+ * @param {string} userId - ID of the requester
  * @returns {Buffer} The original AES key K (32 bytes)
- *
- * Example:
- *   const K = recoverKeyFromHeader(
- *     accessResult.encryptedKeyForYou,
- *     doctor.privateKey
- *   );
  */
-function recoverKeyFromHeader(encryptedKeyBase64, privateKeyPem) {
-    if (!encryptedKeyBase64) {
-        throw new Error('No encrypted key provided — user may be revoked');
+function recoverKeyFromHeader(broadcastHeader, authorizedUsers, privateKey, pk, userId) {
+    if (!broadcastHeader || !authorizedUsers) {
+        throw new Error('Broadcast header and authorized users set are required');
     }
-    if (!privateKeyPem) {
+    if (!privateKey) {
         throw new Error('Private key is required to recover AES key');
     }
 
-    const encryptedKeyBuffer = Buffer.from(encryptedKeyBase64, 'base64');
-    return crypto.privateDecrypt(privateKeyPem, encryptedKeyBuffer);
+    // Use BGW to decrypt the header to get the symmetric key
+    const keyHex = bgw.decrypt(pk, privateKey, broadcastHeader, authorizedUsers, userId);
+    return Buffer.from(keyHex, 'hex');
 }
 
 /**
- * Add a new user to an existing broadcast header.
- * Called when a new doctor is added to an authorized set.
- *
- * @param {Object} existingHeader  - Current broadcast header object
- * @param {string} newUserId       - The new user's ID
- * @param {string} newUserPublicKey - The new user's RSA public key (PEM)
- * @param {Buffer} aesKey          - The original AES key K
+ * Update the header for adding/revoking users (BGW header update).
+ * 
+ * @param {Object} pk - BGW Public Parameters
+ * @param {Object} existingHeader - Current BGW header
+ * @param {Array} currentUsers - Current authorized users
+ * @param {Array} newUsers - New list of authorized users
  * @returns {Object} Updated broadcast header
  */
-function addUserToHeader(existingHeader, newUserId, newUserPublicKey, aesKey) {
-    const updatedHeader = { ...existingHeader };
-    const encryptedKey = crypto.publicEncrypt(newUserPublicKey, aesKey);
-    updatedHeader[newUserId] = encryptedKey.toString('base64');
+function updateBroadcastHeader(pk, existingHeader, currentUsers, newUsers) {
+    // BGW update header function creates a new header for the new set
+    const updatedHeader = bgw.updateHeader(pk, existingHeader, currentUsers, newUsers);
     return updatedHeader;
-}
-
-/**
- * Remove a user from a broadcast header (revocation).
- * This is the KEY ADVANTAGE of broadcast encryption:
- * revoke without re-encrypting the file.
- *
- * @param {Object} existingHeader - Current broadcast header object
- * @param {string} revokedUserId  - The user to remove
- * @returns {Object} Updated broadcast header without the revoked user
- */
-function revokeUserFromHeader(existingHeader, revokedUserId) {
-    const updatedHeader = { ...existingHeader };
-
-    if (!updatedHeader[revokedUserId]) {
-        console.warn(`User ${revokedUserId} not found in broadcast header`);
-        return updatedHeader;
-    }
-
-    delete updatedHeader[revokedUserId];
-    return updatedHeader;
-}
-
-/**
- * Check if a user is in the broadcast header (authorized set).
- *
- * @param {Object} broadcastHeader - The broadcast header object
- * @param {string} userId          - User to check
- * @returns {boolean}
- */
-function isUserAuthorized(broadcastHeader, userId) {
-    return !!(broadcastHeader && broadcastHeader[userId]);
-}
-
-/**
- * Get the list of authorized user IDs from a header.
- *
- * @param {Object} broadcastHeader
- * @returns {string[]} Array of user IDs currently in authorized set
- */
-function getAuthorizedUsers(broadcastHeader) {
-    return Object.keys(broadcastHeader || {});
 }
 
 module.exports = {
     buildBroadcastHeader,
     recoverKeyFromHeader,
-    addUserToHeader,
-    revokeUserFromHeader,
-    isUserAuthorized,
-    getAuthorizedUsers
-};
+    updateBroadcastHeader
+};

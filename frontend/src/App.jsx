@@ -11,6 +11,7 @@ import Explorer from './pages/Explorer'
 import Performance from './pages/Performance'
 import { useAuth } from './hooks/useAuth'
 import ErrorBoundary from './components/ErrorBoundary'
+import RecordViewer from './RecordViewer'
 
 function PublicRoute({ children }) {
   return <MainLayout>{children}</MainLayout>
@@ -40,6 +41,7 @@ function App() {
         <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
         <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/test-bgw" element={<PublicRoute><RecordViewer /></PublicRoute>} />
 
         {/* Secure Dashboard View */}
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />

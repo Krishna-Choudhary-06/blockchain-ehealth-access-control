@@ -9,6 +9,7 @@
     "fabric-ca-client": "^2.2.20",
     "fabric-network": "^2.2.20",
     "ipfs-http-client": "^59.0.0",
+    "mcl-wasm": "^2.2.0",
     "multer": "^2.2.0"
   }
 }

@@ -181,19 +181,28 @@ class DataStorage extends Contract {
     // NEVER use new Date() inside chaincode.
     // ─────────────────────────────────────────────────────────
     _getTimestamp(ctx) {
-    try {
-        const ts = ctx.stub.getTxTimestamp();
-        if (ts && ts.seconds) {
-            const secs = ts.seconds.low !== undefined 
-                ? ts.seconds.low 
-                : parseInt(ts.seconds.toString());
-            return new Date(secs * 1000).toISOString();
+        try {
+            const ts = ctx.stub.getTxTimestamp();
+            if (ts) {
+                if (typeof ts.toDate === 'function') {
+                    return ts.toDate().toISOString();
+                } else if (ts.seconds) {
+                    const secs = ts.seconds.low !== undefined ? ts.seconds.low : parseInt(ts.seconds.toString());
+                    return new Date(secs * 1000).toISOString();
+                } else if (ts.getTime) {
+                    return new Date(ts.getTime()).toISOString();
+                }
+            }
+        } catch(e) {
+            // Log silently or handle
         }
-        return new Date().toISOString();
-    } catch(e) {
-        return new Date().toISOString();
+        
+        // CRITICAL FIX: NEVER fallback to new Date()!
+        // It executes at different times on peer0 and peer1, causing the Read/Write sets to differ,
+        // which triggers the "Peer endorsements do not match" error.
+        // We fallback to a deterministic string if timestamp retrieval completely fails.
+        return '1970-01-01T00:00:00.000Z';
     }
-}
 }
 
 module.exports = DataStorage;

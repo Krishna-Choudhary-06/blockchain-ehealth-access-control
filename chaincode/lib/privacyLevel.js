@@ -7,16 +7,20 @@ class PrivacyLevel extends Contract {
     _getTimestamp(ctx) {
         try {
             const ts = ctx.stub.getTxTimestamp();
-            if (ts && ts.seconds) {
-                const secs = ts.seconds.low !== undefined
-                    ? ts.seconds.low
-                    : parseInt(ts.seconds.toString());
-                return new Date(secs * 1000).toISOString();
+            if (ts) {
+                if (typeof ts.toDate === 'function') {
+                    return ts.toDate().toISOString();
+                } else if (ts.seconds) {
+                    const secs = ts.seconds.low !== undefined ? ts.seconds.low : parseInt(ts.seconds.toString());
+                    return new Date(secs * 1000).toISOString();
+                } else if (ts.getTime) {
+                    return new Date(ts.getTime()).toISOString();
+                }
             }
-            return new Date().toISOString();
         } catch(e) {
-            return new Date().toISOString();
+            // Log silently
         }
+        return '1970-01-01T00:00:00.000Z';
     }
 
     async assignLevel(ctx, userId, level) {

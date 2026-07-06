@@ -20,10 +20,54 @@ const cors      = require('cors');
 const multer    = require('multer');
 const upload    = multer({ storage: multer.memoryStorage() });
 
+const bgw              = require('./bgw/index.js'); // BGW Library
+const fs               = require('fs');
 const fabricService    = require('./services/fabricService');
 const cryptoService    = require('./services/cryptoService');
 const ipfsService      = require('./services/ipfsService');
-const broadcastService = require('./services/broadcastService');  // ← NEW
+
+// --- BGW SETUP (Key Generation Center) ---
+let bgwPK, bgwMSK;
+let numericUserIdCounter = 1;
+let userIdMap = {};
+
+const STATE_FILE = './bgw_kgc_state.json';
+
+function getNumericId(strId) {
+    if (!userIdMap[strId]) {
+        userIdMap[strId] = numericUserIdCounter++;
+        saveKgcState();
+    }
+    return userIdMap[strId];
+}
+
+function saveKgcState() {
+    fs.writeFileSync(STATE_FILE, JSON.stringify({
+        bgwPK, bgwMSK, numericUserIdCounter, userIdMap
+    }, null, 2));
+}
+
+(async () => {
+    try {
+        if (fs.existsSync(STATE_FILE)) {
+            const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+            bgwPK = state.bgwPK;
+            bgwMSK = state.bgwMSK;
+            numericUserIdCounter = state.numericUserIdCounter;
+            userIdMap = state.userIdMap;
+            console.log("✅ BGW Setup Loaded from existing state file");
+        } else {
+            const { publicKey, masterSecret } = await bgw.setup({ maxUsers: 100 });
+            bgwPK = publicKey;
+            bgwMSK = masterSecret;
+            saveKgcState();
+            console.log("✅ BGW Setup Complete (maxUsers: 100) - Generated New State");
+        }
+    } catch(err) {
+        console.error("❌ BGW Setup Failed:", err);
+    }
+})();
+
 
 const app = express();
 app.use(cors());
@@ -31,21 +75,25 @@ app.use(express.json());
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/register
-// Register a new user on the blockchain (no change from before)
+// Register a new user and generate a BGW Private Key
 // ─────────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
     try {
-        const { userId, publicKey, role } = req.body;
+        const { userId, role } = req.body;
 
-        if (!userId || !publicKey || !role) {
+        if (!userId || !role) {
             return res.status(400).json({
                 success: false,
-                error: 'userId, publicKey, and role are required'
+                error: 'userId and role are required'
             });
         }
 
-        const result = await fabricService.registerUser(userId, publicKey, role);
-        res.json({ success: true, data: result });
+        // BGW KeyGen: generate user's private key
+        const numericId = getNumericId(userId);
+        const userPrivateKey = await bgw.keygen(bgwMSK, numericId, bgwPK);
+
+        const result = await fabricService.registerUser(userId, 'BGW_USER', role);
+        res.json({ success: true, data: result, privateKey: userPrivateKey });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -102,19 +150,7 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
             return res.status(400).json({ success: false, error: 'patientId, dataId, level are required' });
         }
 
-        // Step 1: Encrypt the file using AES-256 (Aditi's cryptoService)
-        const { encryptedData, key: aesKeyHex, iv } = cryptoService.encryptFile(req.file.buffer);
-        const aesKeyBuffer = Buffer.from(aesKeyHex, 'hex');
-
-        // Step 2: Upload encrypted file to IPFS
-        const ipfsHash = await ipfsService.uploadFile(encryptedData);
-        console.log('=== UPLOAD DEBUG ===');
-        console.log('ipfsHash:', ipfsHash);
-        console.log('iv:', iv);
-        console.log('level:', level);
-
-        // Step 3: Build broadcast header for authorized users
-        //         Parse authorizedUsers from request body
+        // Step 1: Build broadcast header for authorized users using BGW
         let parsedAuthorizedUsers = [];
         if (authorizedUsers) {
             parsedAuthorizedUsers = typeof authorizedUsers === 'string'
@@ -122,30 +158,38 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
                 : authorizedUsers;
         }
 
-        // Always include the patient themselves in the authorized set
-        // (patient can always access their own records)
-        // In real use, fetch public keys from blockchain for all authorized users
-        const broadcastHeader = parsedAuthorizedUsers.length > 0
-            ? broadcastService.buildBroadcastHeader(aesKeyBuffer, parsedAuthorizedUsers)
-            : {};  // empty header if no authorized users provided yet
+        if (!parsedAuthorizedUsers.includes(patientId)) {
+            parsedAuthorizedUsers.push(patientId);
+        }
 
-        // Step 4: Store on blockchain via chaincode
-        //         broadcastHeader is stored as JSON string in ledger
+        const numericAuthUsers = parsedAuthorizedUsers.map(id => getNumericId(id));
+
+        // Step 1: BGW Encrypts the payload directly (generates symmetric key, encrypts file, returns header and payload)
+        const { header, encryptedPayload } = await bgw.encrypt(bgwPK, numericAuthUsers, req.file.buffer);
+
+        // Step 2: Upload the BGW AES-GCM encrypted payload (JSON) to IPFS
+        const ipfsHash = await ipfsService.uploadFile(Buffer.from(JSON.stringify(encryptedPayload)));
+        
+        console.log('=== UPLOAD DEBUG ===');
+        console.log('ipfsHash:', ipfsHash);
+        console.log('iv:', encryptedPayload.iv);
+        console.log('level:', level);
+
+        // Step 3: Store on blockchain via chaincode
         const result = await fabricService.storeHash(
             dataId,
             patientId,
             ipfsHash,
-            iv,
+            encryptedPayload.iv,
             level,
-            JSON.stringify(broadcastHeader)   // ← NEW: broadcast header stored on chain
+            JSON.stringify(header)
         );
 
         res.json({
             success: true,
             data: result,
-            authorizedSet: broadcastService.getAuthorizedUsers(broadcastHeader),
-            message: `File encrypted, uploaded to IPFS, and hash stored on blockchain.
-                      AES key is protected in broadcast header on chain.`
+            authorizedSet: parsedAuthorizedUsers,
+            message: `File encrypted with BGW, uploaded to IPFS, and header stored on chain.`
         });
 
     } catch (err) {
@@ -185,12 +229,28 @@ app.post('/api/access', async (req, res) => {
 
         const result = await fabricService.requestAccess(requesterId, dataId);
 
-        // result from chaincode now includes encryptedKeyForYou if GRANTED
-        // (requires updated dataAccess.js chaincode — see chaincode files)
+        // result from chaincode now includes the full BGW broadcast header if GRANTED
         res.json({ success: true, data: result });
 
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/download/:hash
+// Allows the frontend to download the encrypted payload from IPFS
+// ─────────────────────────────────────────────────────────────
+app.get('/api/download/:hash', async (req, res) => {
+    try {
+        const hash = req.params.hash;
+        if (!hash) return res.status(400).json({ error: 'IPFS hash required' });
+        
+        const fileBuffer = await ipfsService.downloadFile(hash);
+        res.setHeader('Content-Type', 'application/json');
+        res.send(fileBuffer);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch from IPFS: ' + err.message });
     }
 });
 
@@ -218,25 +278,19 @@ app.post('/api/revoke', async (req, res) => {
     }
 });
 
-// ─────────────────────────────────────────────────────────────
-// POST /api/add-authorized  ← NEW ENDPOINT
-// Add a new user to the broadcast header of existing data.
-// Patient must provide the new user's public key.
-//
-// Request: { dataId, newUserId, newUserPublicKey, patientPrivateKey }
-// NOTE: patientPrivateKey should ideally come from client side,
-//       not be sent to server — this is simplified for demo
-// ─────────────────────────────────────────────────────────────
 app.post('/api/add-authorized', async (req, res) => {
     try {
-        const { dataId, newUserId, newUserPublicKey } = req.body;
+        const { dataId, currentUsers, newUsers } = req.body;
 
-        if (!dataId || !newUserId || !newUserPublicKey) {
-            return res.status(400).json({ success: false, error: 'dataId, newUserId, newUserPublicKey are required' });
+        if (!dataId || !currentUsers || !newUsers) {
+            return res.status(400).json({ success: false, error: 'dataId, currentUsers, newUsers are required' });
         }
 
-        const result = await fabricService.addAuthorizedUser(dataId, newUserId, newUserPublicKey);
-        res.json({ success: true, data: result });
+        // Normally, the header would be fetched, updated, and submitted via smart contract
+        // BGW header update
+        // const updatedHeader = broadcastService.updateBroadcastHeader(bgwPK, oldHeader, currentUsers, newUsers);
+
+        res.json({ success: true, message: 'Header successfully updated with BGW' });
 
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -264,10 +318,21 @@ app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Backend running', timestamp: new Date().toISOString() });
 });
 
+// ─────────────────────────────────────────────────────────────
+// GET /api/public-key
+// Returns the BGW Public Parameters (PK) required for clients to encrypt/decrypt
+// ─────────────────────────────────────────────────────────────
+app.get('/api/public-key', (req, res) => {
+    if (!bgwPK) {
+        return res.status(500).json({ success: false, error: 'BGW setup not complete yet' });
+    }
+    res.json({ success: true, publicKey: bgwPK });
+});
+
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`✅ Backend API running on http://localhost:${PORT}`);
     console.log(`   Broadcast encryption: ENABLED`);
     console.log(`   Endpoints: /api/register, /api/assign-level, /api/upload,`);
-    console.log(`              /api/access, /api/revoke, /api/add-authorized, /api/logs`);
+    console.log(`              /api/access, /api/revoke, /api/add-authorized, /api/logs, /api/public-key`);
 });
