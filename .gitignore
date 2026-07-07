@@ -23,3 +23,5 @@ logs/
 *.pem
 *.key
 *.crtapp/wallet/
+*Zone.Identifier
+*:Zone.Identifier
