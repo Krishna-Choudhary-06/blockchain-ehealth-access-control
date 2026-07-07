@@ -1,8 +1,6 @@
-'use strict';
+import * as ctx from './context.js';
 
-const ctx = require('./context');
-
-async function keygen(masterSecret, recipientId, publicKey) {
+export async function keygen(masterSecret, recipientId, publicKey) {
   await ctx.init();
 
   if (!masterSecret || masterSecret.scheme !== 'BGW05') {
@@ -34,11 +32,6 @@ async function keygen(masterSecret, recipientId, publicKey) {
   };
 }
 
-async function keygenMany(masterSecret, recipientIds, publicKey) {
+export async function keygenMany(masterSecret, recipientIds, publicKey) {
   return Promise.all(recipientIds.map((id) => keygen(masterSecret, id, publicKey)));
 }
-
-module.exports = {
-  keygen,
-  keygenMany,
-};

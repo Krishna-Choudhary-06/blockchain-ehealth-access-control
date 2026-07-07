@@ -1,6 +1,4 @@
-'use strict';
-
-const ctx = require('./context');
+import * as ctx from './context.js';
 
 function powerLadder(base, alpha, max) {
   const powers = {};
@@ -20,7 +18,7 @@ function serializeLadder(ladder, serializer, skipIndex) {
   );
 }
 
-async function setup(options = {}) {
+export async function setup(options = {}) {
   await ctx.init();
 
   const n = options.n || options.maxUsers;
@@ -59,7 +57,3 @@ async function setup(options = {}) {
     },
   };
 }
-
-module.exports = {
-  setup,
-};
