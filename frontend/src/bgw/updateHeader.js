@@ -1,9 +1,7 @@
-'use strict';
+import * as ctx from './context.js';
+import { computeHeader, normalizeRecipients } from './encrypt.js';
 
-const ctx = require('./context');
-const { computeHeader, normalizeRecipients } = require('./encrypt');
-
-async function updateHeader(publicKey, header, nextRecipientIds, options = {}) {
+export async function updateHeader(publicKey, header, nextRecipientIds, options = {}) {
   await ctx.init();
 
   if (!header || header.scheme !== 'BGW05') {
@@ -30,19 +28,13 @@ async function updateHeader(publicKey, header, nextRecipientIds, options = {}) {
   };
 }
 
-async function addRecipients(publicKey, header, recipientIdsToAdd, options = {}) {
+export async function addRecipients(publicKey, header, recipientIdsToAdd, options = {}) {
   const next = [...new Set([...(header.recipientIds || []), ...recipientIdsToAdd].map(Number))];
   return updateHeader(publicKey, header, next, options);
 }
 
-async function removeRecipients(publicKey, header, recipientIdsToRemove, options = {}) {
+export async function removeRecipients(publicKey, header, recipientIdsToRemove, options = {}) {
   const removed = new Set(recipientIdsToRemove.map(Number));
   const next = (header.recipientIds || []).map(Number).filter((id) => !removed.has(id));
   return updateHeader(publicKey, header, next, options);
 }
-
-module.exports = {
-  updateHeader,
-  addRecipients,
-  removeRecipients,
-};

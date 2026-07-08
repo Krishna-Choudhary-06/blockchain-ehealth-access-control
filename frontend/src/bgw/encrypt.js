@@ -1,8 +1,6 @@
-'use strict';
+import * as ctx from './context.js';
 
-const ctx = require('./context');
-
-function deserializePublicKey(publicKey) {
+export function deserializePublicKey(publicKey) {
   if (!publicKey || publicKey.scheme !== 'BGW05') {
     throw new Error('Expected a BGW05 public key.');
   }
@@ -24,7 +22,7 @@ function deserializePublicKey(publicKey) {
   };
 }
 
-function normalizeRecipients(recipientIds, n) {
+export function normalizeRecipients(recipientIds, n) {
   const ids = [...new Set(recipientIds.map(Number))].sort((a, b) => a - b);
   if (ids.length === 0) {
     throw new Error('BGW encryption requires at least one recipient.');
@@ -33,7 +31,7 @@ function normalizeRecipients(recipientIds, n) {
   return ids;
 }
 
-function computeHeader(publicKey, recipientIds, t) {
+export function computeHeader(publicKey, recipientIds, t) {
   const pk = deserializePublicKey(publicKey);
   const recipients = normalizeRecipients(recipientIds, pk.n);
 
@@ -62,7 +60,7 @@ function computeHeader(publicKey, recipientIds, t) {
   };
 }
 
-async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
+export async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
   await ctx.init();
 
   const t = options.t ? ctx.frFromHex(options.t) : ctx.randomFr();
@@ -76,12 +74,12 @@ async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
     c1: ctx.serializeG1(computed.c1),
   };
 
-  const key = ctx.kdfFromGT(computed.keyGt, options.info || 'payload');
-  const encryptedPayload = ctx.aesGcmEncrypt(
-  key,
-  plaintext,
-  options.aad || null
-);
+  const key = await ctx.kdfFromGT(computed.keyGt, options.info || 'payload');
+  const encryptedPayload = await ctx.aesGcmEncrypt(
+    key,
+    plaintext,
+    options.aad || null
+  );
 
   const result = {
     header,
@@ -93,7 +91,7 @@ async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
   return result;
 }
 
-async function encapsulate(publicKey, recipientIds, options = {}) {
+export async function encapsulate(publicKey, recipientIds, options = {}) {
   await ctx.init();
   const t = options.t ? ctx.frFromHex(options.t) : ctx.randomFr();
   const computed = computeHeader(publicKey, recipientIds, t);
@@ -107,18 +105,10 @@ async function encapsulate(publicKey, recipientIds, options = {}) {
   };
   const result = {
     header,
-    key: ctx.kdfFromGT(computed.keyGt, options.info || 'payload'),
+    key: await ctx.kdfFromGT(computed.keyGt, options.info || 'payload'),
   };
   if (options.exportUpdateToken) {
     result.updateToken = ctx.serializeFr(t);
   }
   return result;
 }
-
-module.exports = {
-  encrypt,
-  encapsulate,
-  computeHeader,
-  deserializePublicKey,
-  normalizeRecipients,
-};

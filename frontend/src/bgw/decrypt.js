@@ -1,9 +1,7 @@
-'use strict';
+import * as ctx from './context.js';
+import { deserializePublicKey } from './encrypt.js';
 
-const ctx = require('./context');
-const { deserializePublicKey } = require('./encrypt');
-
-function deriveGT(publicKey, header, privateKey) {
+export function deriveGT(publicKey, header, privateKey) {
   const pk = deserializePublicKey(publicKey);
 
   if (!header || header.scheme !== 'BGW05') {
@@ -49,19 +47,14 @@ function deriveGT(publicKey, header, privateKey) {
   return ctx.mcl.div(numerator, denominator);
 }
 
-async function decrypt(publicKey, header, privateKey, encryptedPayload, options = {}) {
+export async function decrypt(publicKey, header, privateKey, encryptedPayload, options = {}) {
   await ctx.init();
 
   const keyGt = deriveGT(publicKey, header, privateKey);
-  const key = ctx.kdfFromGT(keyGt, options.info || 'payload');
+  const key = await ctx.kdfFromGT(keyGt, options.info || 'payload');
   return ctx.aesGcmDecrypt(
-  key,
-  encryptedPayload,
-  options.aad ?? null
-);
+    key,
+    encryptedPayload,
+    options.aad ?? null
+  );
 }
-
-module.exports = {
-  decrypt,
-  deriveGT,
-};
