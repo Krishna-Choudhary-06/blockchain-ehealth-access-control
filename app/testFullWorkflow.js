@@ -40,6 +40,7 @@ async function main() {
         patientId,
         cid,
         JSON.stringify(envelope.bgwHeader),
+        envelope.updateToken || '',
         'L0',
         [doctorId],
         payloadHash,

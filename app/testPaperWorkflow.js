@@ -43,6 +43,7 @@ async function main() {
         patientId,
         `bafy-paper-smoke-${suffix}`,
         JSON.stringify(envelope.bgwHeader),
+        envelope.updateToken || '',
         'L0',
         [doctorId],
         payloadHash,

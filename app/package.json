@@ -4,7 +4,15 @@
   "main": "server.js",
   "scripts": {
     "smoke:paper": "node testPaperWorkflow.js",
-    "smoke:full": "node testFullWorkflow.js"
+    "smoke:full": "node testFullWorkflow.js",
+    "benchmark": "node benchmark/runner.js",
+    "benchmark:bgw": "node benchmark/bgwBenchmark.js",
+    "benchmark:fabric": "node benchmark/fabricBenchmark.js",
+    "benchmark:ipfs": "node benchmark/ipfsBenchmark.js",
+    "benchmark:e2e": "node benchmark/e2eBenchmark.js",
+    "benchmark:overhead": "node benchmark/overheadBenchmark.js",
+    "benchmark:quick": "node benchmark/runner.js --quick",
+    "benchmark:all": "node benchmark/runner.js --all"
   },
   "dependencies": {
     "body-parser": "^2.3.0",

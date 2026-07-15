@@ -10,6 +10,7 @@ import Upload from './pages/Upload'
 import Explorer from './pages/Explorer'
 import Performance from './pages/Performance'
 import { useAuth } from './hooks/useAuth'
+import ErrorBoundary from './components/ErrorBoundary'
 
 function PublicRoute({ children }) {
   return <MainLayout>{children}</MainLayout>
@@ -35,16 +36,14 @@ function App() {
         }}
       />
       <Routes>
-        {/* Public Views */}
-        <Route path="/" element={<PublicRoute><Home /></PublicRoute>} />
-        <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/" element={<ErrorBoundary><PublicRoute><Home /></PublicRoute></ErrorBoundary>} />
+        <Route path="/register" element={<ErrorBoundary><PublicRoute><Register /></PublicRoute></ErrorBoundary>} />
+        <Route path="/login" element={<ErrorBoundary><PublicRoute><Login /></PublicRoute></ErrorBoundary>} />
 
-        {/* Secure Dashboard View */}
-        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-        <Route path="/upload" element={<PrivateRoute><Upload /></PrivateRoute>} />
-        <Route path="/explorer" element={<PrivateRoute><Explorer /></PrivateRoute>} />
-        <Route path="/performance" element={<PrivateRoute><Performance /></PrivateRoute>} />
+        <Route path="/dashboard" element={<ErrorBoundary><PrivateRoute><Dashboard /></PrivateRoute></ErrorBoundary>} />
+        <Route path="/upload" element={<ErrorBoundary><PrivateRoute><Upload /></PrivateRoute></ErrorBoundary>} />
+        <Route path="/explorer" element={<ErrorBoundary><PrivateRoute><Explorer /></PrivateRoute></ErrorBoundary>} />
+        <Route path="/performance" element={<ErrorBoundary><PrivateRoute><Performance /></PrivateRoute></ErrorBoundary>} />
 
         {/* Fallback Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -54,4 +53,3 @@ function App() {
 }
 
 export default App
-

@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Key, Fingerprint, FileUp, Check, Lock } from 'lucide-react'
 import ValidationMessage from './ValidationMessage'
 import toast from 'react-hot-toast'
 
-export default function LoginForm({ verifiedUser, onSubmit }) {
+export default function LoginForm({ verifiedUser, onSubmit, initialPassword = '' }) {
   const [pemFile, setPemFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const hasStoredPassword = Boolean(verifiedUser.passwordHash)
@@ -12,15 +12,25 @@ export default function LoginForm({ verifiedUser, onSubmit }) {
   const {
     register,
     handleSubmit,
+    reset,
     formState: { errors }
   } = useForm({
     defaultValues: {
       email: verifiedUser.email,
       identityId: verifiedUser.identityId,
-      password: '',
+      password: initialPassword,
       rememberDevice: false
     }
   })
+
+  useEffect(() => {
+    reset({
+      email: verifiedUser.email,
+      identityId: verifiedUser.identityId,
+      password: initialPassword,
+      rememberDevice: false
+    })
+  }, [initialPassword, reset, verifiedUser.email, verifiedUser.identityId])
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0]

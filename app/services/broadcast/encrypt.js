@@ -67,10 +67,6 @@ async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
 
   const t = options.t ? ctx.frFromHex(options.t) : ctx.randomFr();
   const computed = computeHeader(publicKey, recipientIds, t);
-  console.log(
-  "ENCRYPT GT:",
-  ctx.serializeGT(computed.keyGt)
-);
   const header = {
     scheme: 'BGW05',
     curve: 'BLS12-381',
@@ -101,10 +97,6 @@ async function encapsulate(publicKey, recipientIds, options = {}) {
   await ctx.init();
   const t = options.t ? ctx.frFromHex(options.t) : ctx.randomFr();
   const computed = computeHeader(publicKey, recipientIds, t);
-  console.log(
-  "ENCRYPT GT:",
-  ctx.serializeGT(computed.keyGt)
-);
   const header = {
     scheme: 'BGW05',
     curve: 'BLS12-381',

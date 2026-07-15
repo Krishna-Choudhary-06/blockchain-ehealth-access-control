@@ -37,7 +37,6 @@ class PrivacyLevel extends Contract {
             userId,
             level,
             levelNum: parseInt(level.substring(1)),
-            clearanceRank: this._clearanceRank(level),
             assignedAt: this._getTimestamp(ctx)
         };
 
@@ -49,12 +48,36 @@ class PrivacyLevel extends Contract {
         return JSON.stringify(record);
     }
 
-    _clearanceRank(level) {
-        const ranks = { L0: 3, L1: 2, L2: 1, L3: 0 };
+    _privacyRank(level) {
+        const ranks = { L0: 0, L1: 1, L2: 2, L3: 3 };
         if (!(level in ranks)) {
             throw new Error('Invalid level: ' + level);
         }
         return ranks[level];
+    }
+
+    _roleAccessRank(role) {
+        const normalized = String(role || '').trim().toLowerCase();
+        const ranks = {
+            doctor: 0,
+            nurse: 1,
+            'lab technician': 1,
+            admin: 2,
+            accountant: 3
+        };
+        if (!(normalized in ranks)) {
+            return Number.POSITIVE_INFINITY;
+        }
+        return ranks[normalized];
+    }
+
+    _canAccessRole(role, requiredLevel) {
+        const rank = this._roleAccessRank(role);
+        const requiredRank = this._privacyRank(requiredLevel);
+        if (!Number.isFinite(rank)) {
+            return false;
+        }
+        return rank <= requiredRank;
     }
 
     async determineHighestAccessLevel(ctx, userId) {
@@ -64,24 +87,22 @@ class PrivacyLevel extends Contract {
         }
 
         const user = JSON.parse(userBytes.toString());
-        const role = String(user.role || '').toLowerCase();
-        let level = 'L2';
+        const role = String(user.role || '').trim();
+        let level = 'L0';
 
-        if (role.includes('doctor') || role.includes('physician') || role.includes('admin')) {
-            level = 'L0';
-        } else if (role.includes('lab')) {
-            level = 'L1';
-        } else if (role.includes('nurse') || role.includes('staff')) {
-            level = 'L2';
-        } else if (role.includes('billing') || role.includes('public')) {
-            level = 'L3';
+        if (role) {
+            const accessRank = this._roleAccessRank(role);
+            if (accessRank === 0) level = 'L0';
+            else if (accessRank === 1) level = 'L1';
+            else if (accessRank === 2) level = 'L2';
+            else if (accessRank === 3) level = 'L3';
         }
 
         return JSON.stringify({
             userId,
             role: user.role,
             level,
-            clearanceRank: this._clearanceRank(level)
+            privacyRank: this._privacyRank(level)
         });
     }
 
@@ -105,6 +126,20 @@ class PrivacyLevel extends Contract {
         }
         await iterator.close();
         return JSON.stringify(results);
+    }
+
+    async wipeAll(ctx) {
+        const iterator = await ctx.stub.getStateByRange(
+            'ACL_', 'ACL_~');
+        let res = await iterator.next();
+        let count = 0;
+        while (!res.done) {
+            await ctx.stub.deleteState(res.value.key);
+            count++;
+            res = await iterator.next();
+        }
+        await iterator.close();
+        return JSON.stringify({ deleted: count, namespace: 'ACL' });
     }
 }
 

@@ -55,8 +55,6 @@ async function encryptForIpfs(publicKey, recipientIds, payload, options = {}) {
         exportUpdateToken: options.exportUpdateToken,
     }
 );
-  console.log("RAW BGW RESULT:", Object.keys(bgwCiphertext));
-console.log("RAW UPDATE TOKEN:", bgwCiphertext.updateToken);
   return fabricIpfsEnvelope({
     bgwCiphertext,
     ipfsCid: options.ipfsCid,

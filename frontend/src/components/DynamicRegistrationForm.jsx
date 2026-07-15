@@ -58,7 +58,7 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
             <ValidationMessage error={errors.email} />
           </div>
 
-          {/* Phone */}
+          {/* Phone - Indian format */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
               Phone Number
@@ -72,11 +72,11 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                 {...register('phone', { 
                   required: 'Phone number is required',
                   pattern: {
-                    value: /^\+?[1-9]\d{1,14}$/,
-                    message: 'Invalid phone format (e.g. +1234567890)'
+                    value: /^[6-9]\d{9}$/,
+                    message: 'Enter a valid 10-digit Indian phone number starting with 6-9'
                   }
                 })}
-                placeholder="e.g. +14155552671"
+                placeholder="e.g. 9876543210"
                 className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
               />
             </div>
@@ -426,6 +426,25 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
           {/* Patient Specific Fields */}
           {role === 'Patient' && (
             <>
+              {/* Organization / Hospital */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Hospital / Organization
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('organization', { required: 'Hospital / Organization is required' })}
+                    placeholder="e.g. Metro General Hospital"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.organization} />
+              </div>
+
               {/* Patient ID */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
@@ -450,66 +469,16 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                 </div>
                 <ValidationMessage error={errors.patientId} />
               </div>
-
-              {/* Emergency Contact */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Emergency Contact Phone
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
-                    <Phone className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="tel"
-                    {...register('emergencyContact', { 
-                      required: 'Emergency contact phone is required',
-                      pattern: {
-                        value: /^\+?[1-9]\d{1,14}$/,
-                        message: 'Invalid phone format'
-                      }
-                    })}
-                    placeholder="e.g. +14155557766"
-                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
-                  />
-                </div>
-                <ValidationMessage error={errors.emergencyContact} />
-              </div>
-
-              {/* Insurance Number */}
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Insurance Number
-                </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
-                    <Heart className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    {...register('insuranceNo', { 
-                      required: 'Insurance number is required',
-                      pattern: {
-                        value: /^INS-\d{8}$/,
-                        message: 'Format must be INS-XXXXXXXX (e.g., INS-98472911)'
-                      }
-                    })}
-                    placeholder="e.g. INS-98472911"
-                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
-                  />
-                </div>
-                <ValidationMessage error={errors.insuranceNo} />
-              </div>
             </>
           )}
 
-          {/* Accountant Specific Fields */}
-          {role === 'Accountant' && (
+          {/* Lab Technician Specific Fields */}
+          {role === 'Lab Technician' && (
             <>
               {/* Employee ID */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Employee ID
+                  Lab Employee ID
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
@@ -520,21 +489,21 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                     {...register('employeeId', { 
                       required: 'Employee ID is required',
                       pattern: {
-                        value: /^EMP-\d{5}$/,
-                        message: 'Format must be EMP-XXXXX (e.g., EMP-10495)'
+                        value: /^LAB-\d{5}$/,
+                        message: 'Format must be LAB-XXXXX (e.g., LAB-10495)'
                       }
                     })}
-                    placeholder="e.g. EMP-10495"
+                    placeholder="e.g. LAB-10495"
                     className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
                   />
                 </div>
                 <ValidationMessage error={errors.employeeId} />
               </div>
 
-              {/* Finance Department */}
+              {/* Lab Department */}
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-                  Finance Department
+                  Lab Department
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
@@ -542,8 +511,8 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                   </div>
                   <input
                     type="text"
-                    {...register('department', { required: 'Finance department name is required' })}
-                    placeholder="e.g. Accounts & Claims"
+                    {...register('department', { required: 'Lab department is required' })}
+                    placeholder="e.g. Pathology / Microbiology"
                     className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
                   />
                 </div>
@@ -562,7 +531,7 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                   <input
                     type="text"
                     {...register('organization', { required: 'Organization is required' })}
-                    placeholder="e.g. City Health Insurance Co."
+                    placeholder="e.g. Metro General Hospital"
                     className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
                   />
                 </div>

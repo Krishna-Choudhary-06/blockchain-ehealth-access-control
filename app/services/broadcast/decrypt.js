@@ -53,19 +53,6 @@ async function decrypt(publicKey, header, privateKey, encryptedPayload, options 
   await ctx.init();
 
   const keyGt = deriveGT(publicKey, header, privateKey);
-  const key = ctx.kdfFromGT(keyGt, options.info || 'payload');
-  return ctx.aesGcmDecrypt(
-  key,
-  encryptedPayload,
-  options.aad ?? null
-);
-}
-async function decrypt(publicKey, header, privateKey, encryptedPayload, options = {}) {
-  await ctx.init();
-
-  const keyGt = deriveGT(publicKey, header, privateKey);
-
-  
 
   const key = ctx.kdfFromGT(keyGt, options.info || 'payload');
 

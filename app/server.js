@@ -12,6 +12,18 @@ const fabricService = require('./services/fabricService');
 const cryptoService = require('./services/cryptoService');
 const ipfsService = require('./services/ipfsService');
 const bgw = require('./services/broadcast');
+const userProfileService = require('./services/userProfileService');
+const {
+    deriveRequiredLevel,
+    deriveEligibleUsers,
+    buildRecipientSet,
+    roleDefaultPrivacyLevel,
+    levelRank,
+    roleAccessRank,
+    canAccessRecord,
+    isRecordOwner,
+    isRecordSubject
+} = require('./services/privacyPolicy');
 
 const app = express();
 app.use(cors());
@@ -29,6 +41,9 @@ function parseJsonField(value, fallback) {
 }
 
 function saveBgwState() {
+    // NOTE: masterSecret (alpha, gamma) is persisted to disk for server restart
+    // recovery. This is acceptable for a demo/prototype but MUST be moved to
+    // a secure key store (vault, HSM, encrypted KMS) in production.
     fs.mkdirSync(stateDir, { recursive: true });
     fs.writeFileSync(
         bgwStatePath,
@@ -94,8 +109,7 @@ app.post('/api/bgw/setup', async (req, res) => {
         res.json({
             success: true,
             data: {
-                publicKey: result.publicKey,
-                masterSecret: result.masterSecret
+                publicKey: result.publicKey
             }
         });
     } catch (err) {
@@ -104,6 +118,8 @@ app.post('/api/bgw/setup', async (req, res) => {
 });
 
 // BGW private key for a registered recipient index i.
+// Accepts an optional client-supplied masterSecret for test/debug use;
+// production callers should omit it and rely on the server-side secret.
 app.post('/api/bgw/keygen', async (req, res) => {
     try {
         await ensureBgwState();
@@ -123,8 +139,14 @@ app.post('/api/bgw/keygen', async (req, res) => {
 // 1. Register user on blockchain
 app.post('/api/register', async (req, res) => {
     try {
-        const { userId, publicKey, role } = req.body;
+        const { userId, publicKey, role, organization } = req.body;
         const result = await fabricService.registerUser(userId, publicKey, role);
+        userProfileService.upsertProfile({
+            userId,
+            role,
+            privacyLevel: roleDefaultPrivacyLevel(role),
+            organization
+        });
         res.json({ success: true, data: result });
     } catch (err) {
     console.error("REGISTER ERROR:");
@@ -143,20 +165,80 @@ app.post('/api/assign-level', async (req, res) => {
     try {
         const { userId, level } = req.body;
         const result = await fabricService.assignLevel(userId, level);
+        const profile = userProfileService.getProfile(userId);
+        if (profile) {
+            userProfileService.upsertProfile({ ...profile, privacyLevel: level });
+        } else {
+            userProfileService.upsertProfile({ userId, role: '', privacyLevel: level });
+        }
         res.json({ success: true, data: result });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
+// Register or update a user's BGW recipient profile for automatic recipient derivation.
+app.post('/api/users/profile', async (req, res) => {
+    try {
+        const { userId, role, privacyLevel, bgwRecipientId, organization } = req.body;
+        const profile = userProfileService.upsertProfile({
+            userId,
+            role,
+            privacyLevel,
+            bgwRecipientId,
+            organization
+        });
+        res.json({ success: true, data: profile });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+app.get('/api/users/profiles', async (req, res) => {
+    try {
+        const profiles = userProfileService.getAllProfiles();
+        res.json({ success: true, data: profiles });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+async function resolveEligibleRecipients(requiredLevel, organization = '') {
+    const profiles = userProfileService.getAllProfiles();
+    let aclRecords = [];
+    try {
+        aclRecords = await fabricService.getAllLevels();
+    } catch (err) {
+        console.warn('Could not load Fabric ACL levels:', err.message);
+    }
+    const users = userProfileService.mergeWithAclLevels(profiles, aclRecords);
+    const orgFiltered = organization
+        ? users.filter((u) => String(u.organization || '').toLowerCase() === organization.toLowerCase())
+        : users;
+    const eligibleUsers = deriveEligibleUsers(orgFiltered, requiredLevel);
+    return {
+        users: orgFiltered,
+        eligibleUsers,
+        ...buildRecipientSet(eligibleUsers)
+    };
+}
+
 // 3. Upload + BGW-encrypt + store medical file in IPFS
 app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
     try {
-        const { patientId, level, dataId, category, ownerId, uploadedBy, uploaderRole } = req.body;
+        const { patientId, dataId, category, ownerId, ownerRecipientId, uploadedBy, uploaderRole } = req.body;
         await ensureBgwState();
-        const recipientIds = parseJsonField(req.body.recipientIds, []);
-        const authorizedUsers = parseJsonField(req.body.authorizedUsers, recipientIds.map(String));
         const publicKey = parseJsonField(req.body.bgwPublicKey, broadcastPublicKey);
+        const recordOwnerId = ownerId || uploadedBy || patientId;
+        const ownerProfile = userProfileService.getProfile(recordOwnerId) || {};
+        const uploadOrganization = req.body.organization || ownerProfile.organization || '';
+        const resolvedOwnerRecipientId = Number(
+            ownerRecipientId ||
+            ownerProfile.bgwRecipientId ||
+            req.body.bgwRecipientId ||
+            req.body.recipientId ||
+            0
+        );
 
         if (!req.file) {
             throw new Error('medicalFile is required.');
@@ -164,31 +246,94 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
         if (!publicKey) {
             throw new Error('BGW public key is required. Call /api/bgw/setup first or send bgwPublicKey.');
         }
-        if (!Array.isArray(recipientIds) || recipientIds.length === 0) {
-            throw new Error('recipientIds must contain at least one BGW recipient index.');
+        if (!patientId) {
+            throw new Error('patientId is required.');
         }
-        if (!Array.isArray(authorizedUsers) || authorizedUsers.length === 0) {
-            throw new Error('authorizedUsers must contain at least one registered Fabric user id.');
+        if (!category) {
+            throw new Error('category is required.');
+        }
+
+        const requiredLevel = deriveRequiredLevel(category);
+        const recipientResolution = await resolveEligibleRecipients(requiredLevel, uploadOrganization);
+        const users = Array.isArray(recipientResolution.users) ? recipientResolution.users : [];
+        const eligibleUsers = Array.isArray(recipientResolution.eligibleUsers) ? recipientResolution.eligibleUsers : [];
+        const recipientIds = Array.isArray(recipientResolution.recipientIds) ? recipientResolution.recipientIds : [];
+        const authorizedUsers = Array.isArray(recipientResolution.authorizedUsers) ? recipientResolution.authorizedUsers : [];
+        let patientBgwId = 0;
+        {
+            const normalizedPid = String(patientId).trim().toLowerCase();
+            const directProfile = userProfileService.getProfile(normalizedPid) || {};
+            patientBgwId = Number(directProfile.bgwRecipientId || directProfile.recipientId || 0);
+            if (!patientBgwId || patientBgwId <= 0) {
+                const allProfiles = userProfileService.getAllProfiles();
+                for (const p of allProfiles) {
+                    if (String(p.userId).trim().toLowerCase() === normalizedPid) {
+                        const pid = Number(p.bgwRecipientId || p.recipientId || 0);
+                        if (pid > 0) { patientBgwId = pid; break; }
+                    }
+                }
+            }
+        }
+        const finalRecipientIds = [
+            ...new Set([
+                ...recipientIds.map(Number).filter((id) => Number.isInteger(id) && id > 0),
+                ...(Number.isInteger(resolvedOwnerRecipientId) && resolvedOwnerRecipientId > 0 ? [resolvedOwnerRecipientId] : []),
+                ...(Number.isInteger(patientBgwId) && patientBgwId > 0 ? [patientBgwId] : [])
+            ])
+        ];
+        const finalAuthorizedUsers = [
+            ...new Set([
+                ...authorizedUsers,
+                ...(recordOwnerId ? [recordOwnerId] : []),
+                ...(patientId ? [patientId] : [])
+            ])
+        ];
+
+        console.info('[upload] privacy policy resolution', {
+            dataId,
+            patientId,
+            category,
+            requiredLevel,
+            candidateUsers: users.map((user) => ({
+                userId: user.userId,
+                role: user.role,
+                privacyLevel: user.privacyLevel || roleDefaultPrivacyLevel(user.role),
+                bgwRecipientId: user.bgwRecipientId
+            })),
+            eligibleUsers: eligibleUsers.map((user) => ({
+                userId: user.userId,
+                role: user.role,
+                privacyLevel: user.privacyLevel || roleDefaultPrivacyLevel(user.role),
+                bgwRecipientId: user.bgwRecipientId
+            })),
+            recipientIds: finalRecipientIds,
+            authorizedUsers: finalAuthorizedUsers,
+            ownerProfile
+        });
+
+        if (!finalRecipientIds.length) {
+            throw new Error(
+                `No eligible BGW recipients found for required level ${requiredLevel}. Make sure registered users have privacyLevel and bgwRecipientId values.`
+            );
         }
 
         const bgwCiphertext = await cryptoService.encryptFileForRecipients(
             req.file.buffer,
             publicKey,
-            recipientIds,
+            finalRecipientIds,
             {
                 dataId,
                 patientId,
-                level,
+                level: requiredLevel,
                 category,
                 filename: req.file.originalname,
                 mimetype: req.file.mimetype,
-                ownerId,
+                ownerId: recordOwnerId,
+                ownerRecipientId: resolvedOwnerRecipientId || undefined,
                 uploadedBy,
                 uploaderRole
             }
         );
-        console.log("UPDATE TOKEN:", bgwCiphertext.updateToken);
-        console.log("BGW CIPHERTEXT KEYS:", Object.keys(bgwCiphertext));
         const envelopeBuffer = Buffer.from(JSON.stringify(bgwCiphertext));
         const payloadHash = crypto.createHash('sha256')
             .update(envelopeBuffer)
@@ -202,18 +347,22 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
             ipfsHash,
             bgwHeaderForFabric,
             bgwCiphertext.updateToken,
-            level,
-            authorizedUsers,
+            requiredLevel,
+            finalAuthorizedUsers,
             payloadHash,
             category || '',
             {
                 filename: req.file.originalname,
                 mimetype: req.file.mimetype,
-                recipients: recipientIds.map(Number),
-                ownerId,
+                recipients: finalRecipientIds.map(Number),
+                ownerId: recordOwnerId,
+                ownerRecipientId: resolvedOwnerRecipientId || null,
                 uploadedBy,
-                uploaderRole
-            }
+                uploaderRole,
+                organization: req.body.organization || ''
+            },
+            [],
+            []
         );
 
         res.json({
@@ -222,8 +371,12 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
             ipfsHash,
             payloadHash,
             bgwHeader: bgwCiphertext.bgwHeader,
-            recipients: recipientIds.map(Number),
-            authorizedUsers
+            requiredLevel,
+            recipients: finalRecipientIds.map(Number),
+            authorizedUsers: finalAuthorizedUsers,
+            ownerId: recordOwnerId,
+            ownerRecipientId: resolvedOwnerRecipientId || null,
+            eligibleUsers: eligibleUsers.map((user) => user.userId)
         });
     }  catch (err) {
     console.error("UPLOAD ERROR:");
@@ -241,66 +394,29 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
 app.post('/api/bgw/decrypt-ipfs', async (req, res) => {
     try {
         const { ipfsHash, privateKey, publicKey, payloadHash } = req.body;
-       const encryptedEnvelope = await ipfsService.downloadFile(access.ipfsHash);
+        if (!ipfsHash) {
+            return res.status(400).json({ success: false, error: 'ipfsHash is required.' });
+        }
+        if (!privateKey) {
+            return res.status(400).json({ success: false, error: 'privateKey is required.' });
+        }
 
-const actualHash = crypto.createHash('sha256')
-    .update(encryptedEnvelope)
-    .digest('hex');
+        const encryptedEnvelope = await ipfsService.downloadFile(ipfsHash);
+        const actualHash = crypto.createHash('sha256')
+            .update(encryptedEnvelope)
+            .digest('hex');
 
-if (access.payloadHash && actualHash !== access.payloadHash) {
-    throw new Error('IPFS payload hash mismatch. Data integrity check failed.');
-}
+        if (payloadHash && actualHash !== payloadHash) {
+            throw new Error('IPFS payload hash mismatch. Data integrity check failed.');
+        }
 
-const envelope = JSON.parse(encryptedEnvelope.toString('utf8'));
-console.log("ENVELOPE KEYS:", Object.keys(envelope));
-console.log("ENVELOPE:", JSON.stringify(envelope, null, 2));
+        const envelope = JSON.parse(encryptedEnvelope.toString('utf8'));
 
-console.log(
-  "Fabric recipients:",
-  typeof access.bgwHeader === 'string'
-    ? JSON.parse(access.bgwHeader).recipientIds
-    : access.bgwHeader.recipientIds
-);
-
-if (access.bgwHeader) {
-    envelope.bgwHeader =
-        typeof access.bgwHeader === 'string'
-            ? JSON.parse(access.bgwHeader)
-            : access.bgwHeader;
-}
-
-console.log("Recipients AFTER replacement:", envelope.bgwHeader.recipientIds);
-
-// Use the latest BGW header from Fabric
-if (access.bgwHeader) {
-    envelope.bgwHeader =
-        typeof access.bgwHeader === 'string'
-            ? JSON.parse(access.bgwHeader)
-            : access.bgwHeader;
-}
-
-console.log("IPFS Header:", envelope.bgwHeader.recipientIds);
-console.log(
-  "IPFS FULL HEADER:",
-  JSON.stringify(envelope.bgwHeader, null, 2)
-);
-
-console.log(
-  "FABRIC FULL HEADER:",
-  JSON.stringify(
-    typeof access.bgwHeader === 'string'
-      ? JSON.parse(access.bgwHeader)
-      : access.bgwHeader,
-    null,
-    2
-  )
-);
-
-const plaintext = await cryptoService.decryptBroadcastFile(
-    envelope,
-    publicKey || broadcastPublicKey,
-    privateKey
-);
+        const plaintext = await cryptoService.decryptBroadcastFile(
+            envelope,
+            publicKey || broadcastPublicKey,
+            privateKey
+        );
 
         res.json({
             success: true,
@@ -318,59 +434,189 @@ const plaintext = await cryptoService.decryptBroadcastFile(
 // Paper Phase 4: authorize on Fabric, verify IPFS integrity, then decrypt.
 app.post('/api/access/decrypt', async (req, res) => {
     try {
-        const { requesterId, dataId, privateKey, publicKey } = req.body;
+        const { requesterId, dataId, privateKey, publicKey, requesterRole } = req.body;
         await ensureBgwState();
-        const access = await fabricService.requestAccess(requesterId, dataId);
+        const access = await fabricService.getData(dataId);
+        const record = access || {};
+        console.log('[decrypt] dataId:', dataId, 'requesterId:', requesterId);
+        console.log('[decrypt] record has grantedUsers:', 'grantedUsers' in record, 'val:', JSON.stringify(record.grantedUsers));
+        console.log('[decrypt] record has authorizedUsers:', 'authorizedUsers' in record, 'val:', JSON.stringify(record.authorizedUsers));
+        console.log('[decrypt] record has revokedUsers:', 'revokedUsers' in record, 'val:', JSON.stringify(record.revokedUsers));
+        console.log('[decrypt] record keys:', Object.keys(record));
+        const requesterProfile = userProfileService.getProfile(requesterId) || {};
+        const effectiveRole = requesterRole || requesterProfile.role || '';
+        const effectivePrivacy = requesterProfile.privacyLevel || roleDefaultPrivacyLevel(effectiveRole);
+        let requesterRecipientId = Number(
+            requesterProfile.bgwRecipientId ||
+            requesterProfile.recipientId ||
+            requesterProfile.bgwIndex ||
+            (typeof privateKey === 'object' && privateKey ? privateKey.recipientId : null) ||
+            0
+        );
+        if (!requesterRecipientId || requesterRecipientId <= 0) {
+            const allProfiles = userProfileService.getAllProfiles();
+            for (const p of allProfiles) {
+                if (String(p.userId).trim().toLowerCase() === String(requesterId).trim().toLowerCase()) {
+                    const pid = Number(p.bgwRecipientId || p.recipientId || 0);
+                    if (pid > 0) { requesterRecipientId = pid; break; }
+                }
+            }
+        }
+        if (requesterRecipientId <= 0 && typeof privateKey === 'string') {
+            try {
+                const parsed = JSON.parse(privateKey);
+                if (parsed && parsed.recipientId) requesterRecipientId = Number(parsed.recipientId);
+            } catch (e) { /* ignore parse failure */ }
+        }
+        const userOrganization = requesterProfile.organization || '';
+        const recordOrganization = record.metadata?.organization || '';
+        const isOwner = isRecordOwner(record, requesterId);
+        const isSubject = isRecordSubject(record, requesterId);
 
-        if (access.status !== 'ACCESS_GRANTED') {
+        const recordGranted = Array.isArray(record.grantedUsers) ? record.grantedUsers : [];
+        const recordRevoked = Array.isArray(record.revokedUsers) ? record.revokedUsers : [];
+        const isAuthorized = canAccessRecord(
+            effectiveRole,
+            record.requiredLevel,
+            {
+                isOwner,
+                isSubject,
+                grantedUsers: recordGranted,
+                revokedUsers: recordRevoked,
+                userId: requesterId,
+                userOrganization,
+                recordOrganization
+            }
+        );
+
+        if (!isAuthorized) {
+            console.log('[403] Access denied for', requesterId, 'role:', effectiveRole, 'level:', record.requiredLevel);
+            console.log('[403] grantedUsers:', JSON.stringify(recordGranted));
+            console.log('[403] revokedUsers:', JSON.stringify(recordRevoked));
+            console.log('[403] userOrg:', userOrganization, 'recordOrg:', recordOrganization);
             return res.status(403).json({
                 success: false,
-                access
+                error: 'Access Denied',
+                access: {
+                    status: 'ACCESS_DENIED',
+                    requesterId,
+                    requesterRole: effectiveRole,
+                    privacyLevel: effectivePrivacy,
+                    requiredLevel: record.requiredLevel,
+                    grantedUsers: recordGranted,
+                    revokedUsers: recordRevoked
+                }
             });
         }
 
-        const encryptedEnvelope = await ipfsService.downloadFile(access.ipfsHash);
+        // Check that the requester is in the BGW recipient set
+        const headerObject = typeof record.bgwHeader === 'string'
+            ? JSON.parse(record.bgwHeader)
+            : record.bgwHeader;
+        const headerRecipientIds = Array.isArray(headerObject?.recipientIds)
+            ? headerObject.recipientIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+            : [];
+
+        const isInBgwSet = requesterRecipientId > 0 && headerRecipientIds.includes(requesterRecipientId);
+        let activeBgwHeader = headerObject;
+        let activeRecord = record;
+
+        if (!isInBgwSet) {
+            const isOwnerOrSubject = isOwner || isSubject;
+            const envelopeUpdateToken = record.updateToken || '';
+
+            if (envelopeUpdateToken) {
+                try {
+                    const repairedHeader = await bgw.addRecipients(
+                        broadcastPublicKey,
+                        headerObject,
+                        [requesterRecipientId],
+                        { updateToken: envelopeUpdateToken }
+                    );
+                    activeBgwHeader = repairedHeader;
+                    const existingAuthorized = Array.isArray(record.authorizedUsers) ? record.authorizedUsers : [];
+                    const existingGranted = Array.isArray(record.grantedUsers) ? record.grantedUsers : [];
+                    activeRecord = await fabricService.updateBroadcastHeader(
+                        dataId,
+                        JSON.stringify(repairedHeader),
+                        {
+                            authorizedUsers: [...new Set([...existingAuthorized, requesterId])],
+                            grantedUsers: [...new Set([...existingGranted, requesterId])],
+                            revokedUsers: (Array.isArray(record.revokedUsers) ? record.revokedUsers : []).filter((userId) => userId !== requesterId)
+                        }
+                    );
+                    console.log('[decrypt-repair] success - added', requesterId, 'to BGW header for', dataId);
+                } catch (repairError) {
+                    console.log('[decrypt-repair] failed:', repairError.message);
+                    if (!isOwnerOrSubject) {
+                        return res.status(403).json({
+                            success: false,
+                            error: 'Auto-repair failed: ' + repairError.message + '. Ask the record owner to grant you access.',
+                            access: {
+                                status: 'ACCESS_DENIED',
+                                requesterId,
+                                requesterRole: effectiveRole,
+                                privacyLevel: effectivePrivacy,
+                                requiredLevel: record.requiredLevel,
+                                reason: 'AUTO_REPAIR_FAILED'
+                            }
+                        });
+                    }
+                    console.log('[decrypt] owner/subject proceeding despite repair failure');
+                }
+            } else if (!isOwnerOrSubject) {
+                return res.status(403).json({
+                    success: false,
+                    error: 'User is not in the BGW recipient set and no update token is available to repair. Ask the record owner to grant you access.',
+                    access: {
+                        status: 'ACCESS_DENIED',
+                        requesterId,
+                        requesterRole: effectiveRole,
+                        privacyLevel: effectivePrivacy,
+                        requiredLevel: record.requiredLevel,
+                        reason: 'NOT_IN_BGW_SET_NO_UPDATE_TOKEN'
+                    }
+                });
+            }
+        }
+
+        const encryptedEnvelope = await ipfsService.downloadFile(record.ipfsHash);
         const actualHash = crypto.createHash('sha256')
             .update(encryptedEnvelope)
             .digest('hex');
-        if (access.payloadHash && actualHash !== access.payloadHash) {
+        if (record.payloadHash && actualHash !== record.payloadHash) {
             throw new Error('IPFS payload hash mismatch. Data integrity check failed.');
         }
 
         const envelope = JSON.parse(encryptedEnvelope.toString('utf8'));
+        console.log('[decrypt] envelope keys:', Object.keys(envelope), 'has updateToken:', !!envelope.updateToken, 'record.updateToken:', record.updateToken, 'requesterRecipientId:', requesterRecipientId, 'headerRecipientIds:', headerRecipientIds);
+        if (record.bgwHeader) {
+            envelope.bgwHeader = activeBgwHeader;
+        }
 
-console.log("ENVELOPE KEYS:", Object.keys(envelope));
-console.log("ENVELOPE:", JSON.stringify(envelope, null, 2));
-
-console.log(
-    "Fabric recipients:",
-    typeof access.bgwHeader === 'string'
-        ? JSON.parse(access.bgwHeader).recipientIds
-        : access.bgwHeader.recipientIds
-);
-
-// Replace stale IPFS header with latest Fabric header
-if (access.bgwHeader) {
-    envelope.bgwHeader =
-        typeof access.bgwHeader === 'string'
-            ? JSON.parse(access.bgwHeader)
-            : access.bgwHeader;
-}
-
-console.log(
-    "Recipients AFTER replacement:",
-    envelope.bgwHeader.recipientIds
-);
-
-const plaintext = await cryptoService.decryptBroadcastFile(
-    envelope,
-    publicKey || broadcastPublicKey,
-    privateKey
-);
+        let plaintext;
+        try {
+            plaintext = await cryptoService.decryptBroadcastFile(
+                envelope,
+                publicKey || broadcastPublicKey,
+                privateKey
+            );
+        } catch (decryptError) {
+            console.log('[decrypt-error]', decryptError.message, 'requesterRecipientId:', requesterRecipientId, 'headerRecipientIds:', headerRecipientIds);
+            throw decryptError;
+        }
 
         res.json({
             success: true,
-            access,
+            access: {
+                status: 'ACCESS_GRANTED',
+                requesterId,
+                requesterRole: effectiveRole,
+                privacyLevel: effectivePrivacy,
+                requiredLevel: record.requiredLevel,
+                grantedUsers: record.grantedUsers || [],
+                revokedUsers: record.revokedUsers || []
+            },
             data: plaintext.toString('base64'),
             encoding: 'base64',
             metadata: envelope.metadata
@@ -413,8 +659,35 @@ app.get('/api/data', async (req, res) => {
 app.post('/api/access', async (req, res) => {
     try {
         const { requesterId, dataId } = req.body;
-        const result = await fabricService.requestAccess(requesterId, dataId);
-        res.json({ success: true, data: result });
+        const record = await fabricService.getData(dataId);
+        const requesterProfile = userProfileService.getProfile(requesterId) || {};
+        const isOwner = isRecordOwner(record, requesterId);
+        const isSubject = isRecordSubject(record, requesterId);
+        const allowed = canAccessRecord(
+            requesterProfile.role,
+            record.requiredLevel,
+            {
+                isOwner,
+                isSubject,
+                grantedUsers: record.grantedUsers || [],
+                revokedUsers: record.revokedUsers || [],
+                userId: requesterId,
+                userOrganization: requesterProfile.organization || '',
+                recordOrganization: record.metadata?.organization || ''
+            }
+        );
+        res.json({
+            success: true,
+            data: {
+                status: allowed ? 'ACCESS_GRANTED' : 'ACCESS_DENIED',
+                requesterId,
+                requesterRole: requesterProfile.role || '',
+                requiredLevel: record.requiredLevel,
+                patientId: record.patientId,
+                ipfsHash: allowed ? record.ipfsHash : null,
+                message: allowed ? 'Access granted' : 'Access denied'
+            }
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -431,7 +704,8 @@ app.get('/api/logs', async (req, res) => {
 });
 app.post('/api/bgw/add-recipients', async (req, res) => {
     try {
-        const { dataId, recipientIds, authorizedUsers = [] } = req.body;
+        let { dataId, recipientIds, authorizedUsers = [], requesterId } = req.body;
+        if (!Array.isArray(authorizedUsers)) authorizedUsers = [];
 
         if (!dataId) {
             return res.status(400).json({
@@ -449,10 +723,23 @@ app.post('/api/bgw/add-recipients', async (req, res) => {
 
         const record = await fabricService.getData(dataId);
 
+        if (!requesterId || !isRecordOwner(record, requesterId)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Only the record owner can grant access.'
+            });
+        }
+
         const header =
             typeof record.bgwHeader === 'string'
                 ? JSON.parse(record.bgwHeader)
                 : record.bgwHeader;
+        if (!header || !record.updateToken) {
+            return res.status(400).json({
+                success: false,
+                error: 'This record does not support BGW recipient management.'
+            });
+        }
 
         const updatedHeader =
             await bgw.addRecipients(
@@ -464,18 +751,38 @@ app.post('/api/bgw/add-recipients', async (req, res) => {
                 }
             );
 
-        const updatedUsers = [
+        const existingGranted = Array.isArray(record.grantedUsers) ? record.grantedUsers : [];
+        const existingAuthorized = Array.isArray(record.authorizedUsers) ? record.authorizedUsers : [];
+        const existingRevoked = Array.isArray(record.revokedUsers) ? record.revokedUsers : [];
+        const nextGranted = [
             ...new Set([
-                ...(record.authorizedUsers || []),
+                ...existingGranted,
                 ...authorizedUsers
             ])
         ];
+        const nextAuthorized = [
+            ...new Set([
+                ...existingAuthorized,
+                ...authorizedUsers
+            ])
+        ];
+
+        console.log('[grant] dataId:', dataId, 'requesterId:', requesterId);
+        console.log('[grant] existingGranted:', JSON.stringify(existingGranted), 'existingAuthorized:', JSON.stringify(existingAuthorized));
+        console.log('[grant] adding authorizedUsers:', JSON.stringify(authorizedUsers));
+        console.log('[grant] nextGranted:', JSON.stringify(nextGranted), 'nextAuthorized:', JSON.stringify(nextAuthorized));
 
         const result =
             await fabricService.updateBroadcastHeader(
                 dataId,
                 JSON.stringify(updatedHeader),
-                updatedUsers
+                {
+                    authorizedUsers: nextAuthorized,
+                    grantedUsers: nextGranted,
+                    revokedUsers: existingRevoked.filter(
+                        (userId) => !authorizedUsers.includes(userId)
+                    )
+                }
             );
 
         res.json({
@@ -494,7 +801,8 @@ app.post('/api/bgw/add-recipients', async (req, res) => {
 });
 app.post('/api/bgw/remove-recipients', async (req, res) => {
     try {
-        const { dataId, recipientIds, authorizedUsers } = req.body;
+        let { dataId, recipientIds, authorizedUsers = [], requesterId } = req.body;
+        if (!Array.isArray(authorizedUsers)) authorizedUsers = [];
 
         if (!dataId) {
             return res.status(400).json({
@@ -512,10 +820,41 @@ app.post('/api/bgw/remove-recipients', async (req, res) => {
 
         const record = await fabricService.getData(dataId);
 
+        if (!requesterId || !isRecordOwner(record, requesterId)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Only the record owner can revoke access.'
+            });
+        }
+
+        const isRemovingOwner = authorizedUsers.some((userId) => isRecordOwner(record, userId));
+        if (isRemovingOwner) {
+            return res.status(403).json({
+                success: false,
+                error: 'Cannot revoke the record owner\'s access.'
+            });
+        }
+
+        const ownerId = record.metadata?.ownerId || record.patientId || record.ownerId || '';
+        const ownerProfile = userProfileService.getProfile(ownerId);
+        const ownerRecipientId = Number(ownerProfile?.bgwRecipientId || 0);
+        if (ownerRecipientId > 0 && recipientIds.map(Number).includes(ownerRecipientId)) {
+            return res.status(403).json({
+                success: false,
+                error: 'Cannot remove the record owner\'s BGW recipient.'
+            });
+        }
+
         const header =
             typeof record.bgwHeader === 'string'
                 ? JSON.parse(record.bgwHeader)
                 : record.bgwHeader;
+        if (!header || !record.updateToken) {
+            return res.status(400).json({
+                success: false,
+                error: 'This record does not support BGW recipient management.'
+            });
+        }
 
         const updatedHeader =
             await bgw.removeRecipients(
@@ -527,16 +866,26 @@ app.post('/api/bgw/remove-recipients', async (req, res) => {
                 }
             );
 
-        const updatedUsers =
-            Array.isArray(authorizedUsers)
-                ? authorizedUsers
-                : (record.authorizedUsers || []);
+        const existingRevoked = Array.isArray(record.revokedUsers) ? record.revokedUsers : [];
+        const existingGranted = Array.isArray(record.grantedUsers) ? record.grantedUsers : [];
+        const existingAuthorized = Array.isArray(record.authorizedUsers) ? record.authorizedUsers : [];
+        const revokedSet = new Set([...existingRevoked, ...authorizedUsers]);
+        const grantedSet = new Set(existingGranted);
+        authorizedUsers.forEach((userId) => grantedSet.delete(userId));
+
+        const nextAuthorized = existingAuthorized.filter(
+            (userId) => !authorizedUsers.includes(userId)
+        );
 
         const result =
             await fabricService.updateBroadcastHeader(
                 dataId,
                 JSON.stringify(updatedHeader),
-                updatedUsers
+                {
+                    authorizedUsers: nextAuthorized,
+                    grantedUsers: [...grantedSet],
+                    revokedUsers: [...revokedSet]
+                }
             );
 
         res.json({

@@ -8,7 +8,7 @@ import {
   Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X 
 } from 'lucide-react'
 import { generateSalt, generateUserKeyPair, getDelay, hashPassword } from '../services/cryptoService'
-import { registerUser, assignLevel, getBGWState, generateBGWPrivateKey } from '../services/apiService'
+import { registerUser, assignLevel, getBGWState, generateBGWPrivateKey, registerUserProfile } from '../services/apiService'
 import StepProgress from './StepProgress'
 import RoleSelector from './RoleSelector'
 import DynamicRegistrationForm from './DynamicRegistrationForm'
@@ -16,6 +16,7 @@ import AttributePreview from './AttributePreview'
 
 export default function EnrollmentWizard() {
   const navigate = useNavigate()
+  const LAST_ENROLLED_KEY = 'last_enrolled_identity'
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [txDetails, setTxDetails] = useState(null)
@@ -103,8 +104,8 @@ export default function EnrollmentWizard() {
       } else if (formData.role === 'Nurse') {
         fieldsToValidate = ['regNo', 'department', 'shiftType', 'organization', 'experience']
       } else if (formData.role === 'Patient') {
-        fieldsToValidate = ['patientId', 'emergencyContact', 'insuranceNo']
-      } else if (formData.role === 'Accountant') {
+        fieldsToValidate = ['organization', 'patientId', 'emergencyContact', 'insuranceNo']
+      } else if (formData.role === 'Lab Technician') {
         fieldsToValidate = ['employeeId', 'department', 'organization']
       } else if (formData.role === 'Admin') {
         fieldsToValidate = ['adminId', 'organization', 'securityLevel']
@@ -174,7 +175,7 @@ export default function EnrollmentWizard() {
       if (formData.role === 'Admin') securityLvl = 'L0'
       else if (formData.role === 'Doctor') securityLvl = 'L0'
       else if (formData.role === 'Nurse') securityLvl = 'L2'
-      else if (formData.role === 'Accountant') securityLvl = 'L3'
+      else if (formData.role === 'Lab Technician') securityLvl = 'L1'
       else if (formData.role === 'Patient') securityLvl = 'L0'
       if (formData.securityLevel) securityLvl = 'L' + formData.securityLevel
 
@@ -193,6 +194,20 @@ export default function EnrollmentWizard() {
 
       // Determine Organization display value
       const finalOrg = formData.organization || formData.department || 'Consortium Hospital'
+      const normalizedName = formData.name.trim().toLowerCase()
+      const normalizedEmail = formData.email.trim().toLowerCase()
+      const normalizedIdentity = identityId.trim().toLowerCase()
+      const normalizedUsers = existingUsers.filter((user) => {
+        const userKeys = JSON.parse(localStorage.getItem(`user_keys_${user.name}`) || '{}')
+        const userName = (user.name || '').trim().toLowerCase()
+        const userEmail = (user.email || userKeys.email || '').trim().toLowerCase()
+        const userIdentity = (user.userId || user.identityId || userKeys.userId || '').trim().toLowerCase()
+        return !(
+          userName === normalizedName ||
+          userEmail === normalizedEmail ||
+          userIdentity === normalizedIdentity
+        )
+      })
 
       // Save keys
       localStorage.setItem(`user_keys_${formData.name}`, JSON.stringify({
@@ -213,7 +228,7 @@ export default function EnrollmentWizard() {
       }))
 
       // Save to registered users list
-      existingUsers.push({
+      normalizedUsers.push({
         userId: identityId,
         name: formData.name,
         email: formData.email,
@@ -226,7 +241,19 @@ export default function EnrollmentWizard() {
         passwordSalt,
         passwordHash
       })
-      localStorage.setItem('registered_users', JSON.stringify(existingUsers))
+      localStorage.setItem('registered_users', JSON.stringify(normalizedUsers))
+
+      try {
+        await registerUserProfile({
+          userId: identityId,
+          role: formData.role,
+          privacyLevel: securityLvl,
+          bgwRecipientId: recipientIndex,
+          organization: finalOrg
+        })
+      } catch (profileError) {
+        console.warn('Could not sync enrolled profile to backend:', profileError)
+      }
 
       const transactionData = {
         txHash: apiResult.data?.txId || apiResult.data?.transactionId || identityId,
@@ -244,6 +271,15 @@ export default function EnrollmentWizard() {
       }
 
       setTxDetails(transactionData)
+      localStorage.setItem(LAST_ENROLLED_KEY, JSON.stringify({
+        name: transactionData.name,
+        identityId: transactionData.identityId,
+        role: transactionData.role,
+        organization: transactionData.organization,
+        email: transactionData.email,
+        passwordHash: transactionData.passwordHash,
+        passwordSalt: transactionData.passwordSalt
+      }))
       setLoading(false)
       toast.success('Identity node enrolled and committed to ledger!', { id: toastId })
     } catch (error) {
@@ -378,10 +414,10 @@ export default function EnrollmentWizard() {
                         <div><span className="text-slate-400">Insurance ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.insuranceNo}</span></div>
                       </>
                     )}
-                    {formData.role === 'Accountant' && (
+                    {formData.role === 'Lab Technician' && (
                       <>
                         <div><span className="text-slate-400">Employee ID:</span> <span className="text-slate-700 dark:text-slate-350">{formData.employeeId}</span></div>
-                        <div><span className="text-slate-400">Finance Dept:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
+                        <div><span className="text-slate-400">Lab Dept:</span> <span className="text-slate-700 dark:text-slate-350">{formData.department}</span></div>
                         <div><span className="text-slate-400">Organization:</span> <span className="text-slate-700 dark:text-slate-350">{formData.organization}</span></div>
                       </>
                     )}
@@ -615,6 +651,15 @@ export default function EnrollmentWizard() {
               <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex justify-end">
                 <button
                   onClick={() => {
+                    localStorage.setItem(LAST_ENROLLED_KEY, JSON.stringify({
+                      name: txDetails.name,
+                      identityId: txDetails.identityId,
+                      role: txDetails.role,
+                      organization: txDetails.organization,
+                      email: txDetails.email,
+                      passwordHash: txDetails.passwordHash,
+                      passwordSalt: txDetails.passwordSalt
+                    }))
                     navigate('/login', {
                       state: {
                         justEnrolled: true,

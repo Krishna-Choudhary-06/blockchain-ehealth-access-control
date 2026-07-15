@@ -3,13 +3,13 @@ import {
   FiActivity, FiCpu, FiHardDrive, FiHash,
   FiClock, FiTrendingUp, FiCheckCircle, FiAlertTriangle
 } from 'react-icons/fi'
-import { getLogs } from '../services/apiService'
+import { getLogs, getDataRecords } from '../services/apiService'
 
 const TEST_PREFIXES = ['doctor_paper_', 'doctor_full_', 'doctor_bgw_', 'record_paper_', 'record_full_', 'data_bgw_']
 
 function isTestArtifact(value = '') {
   const text = String(value).toLowerCase()
-  return TEST_PREFIXES.some(prefix => text.startsWith(prefix)) || ['doctor1', 'record1'].includes(text)
+  return TEST_PREFIXES.some(prefix => text.startsWith(prefix))
 }
 
 function statusFromAction(action = '') {
@@ -21,6 +21,16 @@ function timeLabel(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleString()
+}
+
+function parseJson(value, fallback) {
+  try {
+    if (value == null || value === '') return fallback
+    if (typeof value === 'object') return value
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
 }
 
 function buildBlockRows(logs) {
@@ -42,15 +52,17 @@ function buildBlockRows(logs) {
 export default function Explorer() {
   const [txs, setTxs] = useState([])
   const [blocks, setBlocks] = useState([])
+  const [assets, setAssets] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const loadLogs = async () => {
+    const loadExplorerData = async () => {
       setLoading(true)
       try {
-        const response = await getLogs()
-        if (response.success && Array.isArray(response.data)) {
-          const realLogs = response.data
+        const [logsResponse, dataResponse] = await Promise.all([getLogs(), getDataRecords()])
+
+        if (logsResponse.success && Array.isArray(logsResponse.data)) {
+          const realLogs = logsResponse.data
             .filter(log => !isTestArtifact(log.requesterId) && !isTestArtifact(log.dataId))
             .sort((a, b) => new Date(b.time) - new Date(a.time))
 
@@ -67,6 +79,30 @@ export default function Explorer() {
           })))
           setBlocks(buildBlockRows(realLogs))
         }
+
+        if (dataResponse.success && Array.isArray(dataResponse.data)) {
+          const realAssets = dataResponse.data
+            .filter(record => !isTestArtifact(record.dataId || record.id))
+            .map((record, index) => {
+              const header = parseJson(record.bgwHeader, null)
+              const recipients = Array.isArray(header?.recipientIds)
+                ? header.recipientIds.join(', ')
+                : 'N/A'
+
+              return {
+                id: record.dataId || record.id || `asset-${index}`,
+                patient: record.patientId || record.metadata?.patientId || 'N/A',
+                level: record.requiredLevel || record.level || 'N/A',
+                file: record.metadata?.filename || record.category || record.dataId || 'Medical Record',
+                ipfsHash: record.ipfsHash || 'N/A',
+                recipients,
+                status: header && record.updateToken ? 'BGW Enabled' : 'Legacy',
+                uploadedAt: record.storedAt || record.metadata?.createdAt || 'N/A'
+              }
+            })
+
+          setAssets(realAssets)
+        }
       } catch (err) {
         console.error('Failed to load blockchain logs', err)
       } finally {
@@ -74,7 +110,7 @@ export default function Explorer() {
       }
     }
 
-    loadLogs()
+    loadExplorerData()
   }, [])
 
   const feed = txs.slice(0, 5).map(tx => ({
@@ -107,7 +143,7 @@ export default function Explorer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
           <MetricCard label="Ledger Groups" value={blocks.length} icon={FiHardDrive} tone="purple" />
           <MetricCard label="Access Transactions" value={txs.length} icon={FiHash} tone="blue" />
-          <MetricCard label="Connected Nodes" value="4 / 4" icon={FiCpu} tone="emerald" />
+          <MetricCard label="Fabric Assets" value={assets.length} icon={FiCpu} tone="emerald" />
           <MetricCard label="Ledger Status" value="Operational" icon={FiActivity} tone="indigo" />
         </div>
 
@@ -124,6 +160,21 @@ export default function Explorer() {
                 block.txCount,
                 block.size,
                 block.time
+              ])}
+              />
+
+            <ExplorerTable
+              title="Fabric Asset Registry"
+              description="On-chain data pointers, sensitivity labels, and recipient state for current medical records."
+              empty="No Fabric asset records are available yet."
+              headers={['Data ID', 'Patient', 'Level', 'Status', 'Recipients', 'IPFS CID']}
+              rows={assets.map(asset => [
+                asset.id,
+                asset.patient,
+                asset.level,
+                asset.status,
+                asset.recipients,
+                asset.ipfsHash
               ])}
             />
 

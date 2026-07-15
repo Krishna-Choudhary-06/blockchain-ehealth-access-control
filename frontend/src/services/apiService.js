@@ -31,18 +31,28 @@ export const generateBGWPrivateKey = async (recipientId, masterSecret, publicKey
     return res.data;
 };
 
-export const uploadRecord = async (patientId, dataId, level, file, options = {}) => {
+export const registerUserProfile = async ({ userId, role, privacyLevel, bgwRecipientId, organization }) => {
+    const res = await axios.post(`${API_BASE_URL}/users/profile`, {
+        userId,
+        role,
+        privacyLevel,
+        bgwRecipientId,
+        organization
+    });
+    return res.data;
+};
+
+export const uploadRecord = async (patientId, dataId, file, options = {}) => {
     const formData = new FormData();
     formData.append('medicalFile', file);
     formData.append('patientId', patientId);
     formData.append('dataId', dataId);
-    formData.append('level', level);
     formData.append('category', options.category || '');
     formData.append('ownerId', options.ownerId || '');
+    formData.append('ownerRecipientId', options.ownerRecipientId || '');
     formData.append('uploadedBy', options.uploadedBy || '');
     formData.append('uploaderRole', options.uploaderRole || '');
-    formData.append('recipientIds', JSON.stringify(options.recipientIds || []));
-    formData.append('authorizedUsers', JSON.stringify(options.authorizedUsers || []));
+    formData.append('organization', options.organization || '');
     if (options.bgwPublicKey) {
         formData.append('bgwPublicKey', JSON.stringify(options.bgwPublicKey));
     }
@@ -56,12 +66,13 @@ export const requestAccess = async (requesterId, dataId) => {
     return res.data;
 };
 
-export const requestAccessAndDecrypt = async (requesterId, dataId, privateKey, publicKey) => {
+export const requestAccessAndDecrypt = async (requesterId, dataId, privateKey, publicKey, requesterRole = '') => {
     const res = await axios.post(`${API_BASE_URL}/access/decrypt`, {
         requesterId,
         dataId,
         privateKey,
-        publicKey
+        publicKey,
+        requesterRole
     });
     return res.data;
 };
@@ -80,3 +91,40 @@ export const getLogs = async () => {
     const res = await axios.get(`${API_BASE_URL}/logs`);
     return res.data;
 };
+export const addRecipients = async (
+  dataId,
+  recipientIds,
+  authorizedUsers = [],
+  requesterId = ''
+) => {
+  const res = await axios.post(
+    `${API_BASE_URL}/bgw/add-recipients`,
+    {
+      dataId,
+      recipientIds,
+      authorizedUsers,
+      requesterId
+    }
+  )
+
+  return res.data
+}
+
+export const removeRecipients = async (
+  dataId,
+  recipientIds,
+  authorizedUsers = [],
+  requesterId = ''
+) => {
+  const res = await axios.post(
+    `${API_BASE_URL}/bgw/remove-recipients`,
+    {
+      dataId,
+      recipientIds,
+      authorizedUsers,
+      requesterId
+    }
+  )
+
+  return res.data
+}

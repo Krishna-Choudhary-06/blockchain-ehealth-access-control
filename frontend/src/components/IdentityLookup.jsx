@@ -1,12 +1,68 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Search, Mail, Hash, User, ShieldAlert, Loader2 } from 'lucide-react'
 
-export default function IdentityLookup({ onIdentityFound }) {
-  const [lookupMethod, setLookupMethod] = useState('certificateId')
-  const [searchValue, setSearchValue] = useState('')
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
+  } catch {
+    return fallback
+  }
+}
+
+function resolveFallbackIdentity(searchValue, lookupMethod) {
+  const val = searchValue.trim().toLowerCase()
+  if (!val) return null
+
+  const users = readJson('registered_users', [])
+  const localMatch = users.find((user) => {
+    if (lookupMethod === 'certificateId' || lookupMethod === 'blockchainId') {
+      return String(user.userId || '').toLowerCase() === val
+    }
+    if (lookupMethod === 'email') {
+      const keysData = readJson(`user_keys_${user.name}`, {})
+      return String(keysData.email || '').toLowerCase() === val
+    }
+    if (lookupMethod === 'username') {
+      return String(user.name || '').toLowerCase() === val
+    }
+    return false
+  })
+
+  return localMatch
+}
+
+export default function IdentityLookup({
+  onIdentityFound,
+  initialLookupMethod = 'certificateId',
+  initialSearchValue = '',
+  autoSearch = false
+}) {
+  const [lookupMethod, setLookupMethod] = useState(initialLookupMethod)
+  const [searchValue, setSearchValue] = useState(initialSearchValue)
   const [searching, setSearching] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const didAutoSearch = useRef(false)
+
+  useEffect(() => {
+    setLookupMethod(initialLookupMethod || 'certificateId')
+    setSearchValue(initialSearchValue || '')
+    setErrorMsg('')
+    didAutoSearch.current = false
+  }, [initialLookupMethod, initialSearchValue])
+
+  useEffect(() => {
+    if (!autoSearch || searching || didAutoSearch.current || !searchValue.trim()) {
+      return
+    }
+
+    didAutoSearch.current = true
+    const timeout = setTimeout(() => {
+      handleLookup()
+    }, 250)
+
+    return () => clearTimeout(timeout)
+  }, [autoSearch, lookupMethod, searchValue, searching])
 
   const handleLookup = () => {
     if (!searchValue.trim()) {
@@ -14,30 +70,12 @@ export default function IdentityLookup({ onIdentityFound }) {
       return
     }
 
-    setErrorMsg('')
-    setSearching(true)
+      setErrorMsg('')
+      setSearching(true)
 
-    // Simulate searching blockchain registry
     setTimeout(() => {
       try {
-        const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
-        
-        // Find matching identity based on selected method
-        const foundUser = users.find(user => {
-          const val = searchValue.trim().toLowerCase()
-          if (lookupMethod === 'certificateId' || lookupMethod === 'blockchainId') {
-            return user.userId.toLowerCase() === val
-          }
-          if (lookupMethod === 'email') {
-            // Check if we can find by matching email in name/org or from keys (emails are saved in user_keys_[name])
-            const keysData = JSON.parse(localStorage.getItem(`user_keys_${user.name}`) || '{}')
-            return keysData.email?.toLowerCase() === val
-          }
-          if (lookupMethod === 'username') {
-            return user.name.toLowerCase() === val
-          }
-          return false
-        })
+        const foundUser = resolveFallbackIdentity(searchValue, lookupMethod)
 
         if (foundUser) {
           // Retrieve complete profile info

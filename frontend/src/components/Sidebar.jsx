@@ -1,5 +1,5 @@
 import { useAuth } from '../hooks/useAuth'
-import { useLocation, Link } from 'react-router-dom'
+import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { 
   FiGrid, FiUpload, FiClock, FiFileText, 
   FiActivity, FiUser, FiUsers, FiSettings
@@ -8,6 +8,7 @@ import {
 export default function Sidebar() {
   const { user } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
 
   // Define menus for each role
   const menus = {
@@ -30,14 +31,31 @@ export default function Sidebar() {
     Nurse: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
       { name: 'Upload File', path: '/upload', icon: FiUpload },
-      { name: 'Lab Reports', path: '#lab-reports', icon: FiFileText },
-      { name: 'Access History', path: '#access-history', icon: FiClock },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
+      { name: 'Explorer', path: '/explorer', icon: FiActivity }
+    ],
+    'Lab Technician': [
+      { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
+      { name: 'Explorer', path: '/explorer', icon: FiActivity }
+    ],
+    Accountant: [
+      { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
       { name: 'Profile', path: '#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
     Admin: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
       { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
       { name: 'Users', path: '#users', icon: FiUsers },
       { name: 'Access Logs', path: '#access-logs', icon: FiClock },
       { name: 'Blockchain Explorer', path: '/explorer', icon: FiActivity },
@@ -80,6 +98,7 @@ export default function Sidebar() {
             const Icon = item.icon
             const isActive = location.pathname === item.path || (item.path.startsWith('#') && location.hash === item.path)
             const isHash = item.path.startsWith('#')
+            const hashTarget = isHash ? `/dashboard${item.path}` : item.path
             
             const linkClasses = `flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group relative ${
               isActive 
@@ -93,15 +112,16 @@ export default function Sidebar() {
             )
 
             return isHash ? (
-              <a
+              <button
                 key={item.name}
-                href={item.path}
-                className={linkClasses}
+                type="button"
+                onClick={() => navigate(hashTarget)}
+                className={`${linkClasses} w-full text-left`}
               >
                 {iconElement}
                 <span>{item.name}</span>
                 {activeIndicator}
-              </a>
+              </button>
             ) : (
               <Link
                 key={item.name}

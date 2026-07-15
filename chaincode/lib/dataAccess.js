@@ -4,6 +4,21 @@ const { Contract } = require('fabric-contract-api');
 
 class DataAccess extends Contract {
 
+    _roleAccessRank(role) {
+        const normalized = String(role || '').trim().toLowerCase();
+        const ranks = {
+            doctor: 0,
+            nurse: 1,
+            'lab technician': 1,
+            admin: 2,
+            accountant: 3
+        };
+        if (!(normalized in ranks)) {
+            return Number.POSITIVE_INFINITY;
+        }
+        return ranks[normalized];
+    }
+
     _getTimestamp(ctx) {
         try {
             const ts = ctx.stub.getTxTimestamp();
@@ -32,17 +47,6 @@ class DataAccess extends Contract {
             });
         }
 
-        const aclBytes = await ctx.stub.getState(
-            'ACL_' + requesterId);
-        if (!aclBytes || aclBytes.length === 0) {
-            return JSON.stringify({
-                status: 'NO_LEVEL',
-                message: 'No privacy level assigned',
-                ipfsHash: null
-            });
-        }
-        const acl = JSON.parse(aclBytes.toString());
-
         const dataBytes = await ctx.stub.getState(
             'DATA_' + dataId);
         if (!dataBytes || dataBytes.length === 0) {
@@ -54,17 +58,16 @@ class DataAccess extends Contract {
         }
         const data = JSON.parse(dataBytes.toString());
 
-        const requesterRank = acl.clearanceRank !== undefined
-            ? acl.clearanceRank
-            : this._clearanceRank(acl.level);
-        const requiredRank = data.requiredClearanceRank !== undefined
-            ? data.requiredClearanceRank
-            : this._clearanceRank(data.requiredLevel);
-        const authUsers = data.authorizedUsers || [];
+        const user = JSON.parse(userBytes.toString());
+        const requesterRank = this._roleAccessRank(user.role);
+        const requiredRank = this._privacyRank(data.requiredLevel);
+        const grantedUsers = data.grantedUsers || [];
+        const revokedUsers = data.revokedUsers || [];
         const isOwner = requesterId === data.patientId || requesterId === data.ownerId;
-        const isListed = authUsers.includes(requesterId);
-        const isPublic = data.requiredLevel === 'L3';
-        const granted = isOwner || isPublic || (requesterRank >= requiredRank && isListed);
+        const isGranted = grantedUsers.includes(requesterId);
+        const isRevoked = revokedUsers.includes(requesterId);
+        const meetsPolicy = requesterRank <= requiredRank;
+        const granted = isOwner || (isGranted && !isRevoked) || (meetsPolicy && !isRevoked);
         const txId = ctx.stub.getTxID();
 
 const log = {
@@ -73,12 +76,13 @@ const log = {
     requesterId,
     dataId,
     action: granted ? 'GRANTED' : 'DENIED',
-    requesterLevel: acl.level,
-    dataLevel: data.requiredLevel,
+        requesterLevel: user.role || data.requiredLevel,
+        dataLevel: data.requiredLevel,
     policy: {
         isOwner,
-        isPublic,
-        isListed,
+        isGranted,
+        isRevoked,
+        meetsPolicy,
         requesterRank,
         requiredRank
     },
@@ -108,8 +112,8 @@ const log = {
         });
     }
 
-    _clearanceRank(level) {
-        const ranks = { L0: 3, L1: 2, L2: 1, L3: 0 };
+    _privacyRank(level) {
+        const ranks = { L0: 0, L1: 1, L2: 2, L3: 3 };
         if (!(level in ranks)) {
             throw new Error('Invalid level: ' + level);
         }
@@ -128,6 +132,20 @@ const log = {
         }
         await iterator.close();
         return JSON.stringify(logs);
+    }
+
+    async wipeAll(ctx) {
+        const iterator = await ctx.stub.getStateByRange(
+            'LOG_', 'LOG_~');
+        let res = await iterator.next();
+        let count = 0;
+        while (!res.done) {
+            await ctx.stub.deleteState(res.value.key);
+            count++;
+            res = await iterator.next();
+        }
+        await iterator.close();
+        return JSON.stringify({ deleted: count, namespace: 'LOG' });
     }
 }
 

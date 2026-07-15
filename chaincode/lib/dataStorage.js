@@ -24,8 +24,8 @@ class DataStorage extends Contract {
         return { L0: 0, L1: 1, L2: 2, L3: 3 };
     }
 
-    _clearanceRank(level) {
-        const ranks = { L0: 3, L1: 2, L2: 1, L3: 0 };
+    _privacyRank(level) {
+        const ranks = { L0: 0, L1: 1, L2: 2, L3: 3 };
         if (!(level in ranks)) {
             throw new Error('Invalid level: ' + level);
         }
@@ -37,13 +37,15 @@ class DataStorage extends Contract {
             prescription: 'L0',
             prescriptions: 'L0',
             laboratory: 'L1',
+            'lab report': 'L1',
             lab: 'L1',
             medical_history: 'L2',
+            'medical history': 'L2',
             history: 'L2',
             billing: 'L3',
             public: 'L3'
         };
-        return map[String(category || '').toLowerCase()] || fallbackLevel || 'L0';
+        return map[String(category || '').toLowerCase().trim()] || fallbackLevel || 'L0';
     }
 
     _parseJson(value, fallback) {
@@ -75,13 +77,12 @@ class DataStorage extends Contract {
             ? JSON.stringify(headerBundle.bgwHeader)
             : bgwHeader;
         const authorizedUsers = headerBundle.authorizedUsers || [];
+        const grantedUsers = headerBundle.grantedUsers || [];
+        const revokedUsers = headerBundle.revokedUsers || [];
         const payloadHash = headerBundle.payloadHash || '';
         const category = headerBundle.category || '';
         const metadata = headerBundle.metadata || {};
         const updateToken = headerBundle.updateToken || '';
-        console.log('===== STORE HASH DEBUG =====');
-console.log('HEADER BUNDLE:', JSON.stringify(headerBundle));
-console.log('UPDATE TOKEN:', updateToken);
 
         const classifiedLevel = this._classifyCategory(category, level);
         if (!(classifiedLevel in levelMap)) {
@@ -100,19 +101,20 @@ console.log('UPDATE TOKEN:', updateToken);
         }
 
         const record = {
-    docType: 'DATA',
-    dataId,
-    patientId,
-    ipfsHash,
-    bgwHeader: storedHeader,
-    updateToken,
-    authorizedUsers,
-    payloadHash,
-    category,
-    metadata,
+            docType: 'DATA',
+            dataId,
+            patientId,
+            ipfsHash,
+            bgwHeader: storedHeader,
+            updateToken,
+            authorizedUsers,
+            grantedUsers,
+            revokedUsers,
+            payloadHash,
+            category,
+            metadata,
             requiredLevel: classifiedLevel,
             requiredLevelNum: levelMap[classifiedLevel],
-            requiredClearanceRank: this._clearanceRank(classifiedLevel),
             storedAt: this._getTimestamp(ctx)
         };
 
@@ -130,15 +132,24 @@ console.log('UPDATE TOKEN:', updateToken);
         });
     }
 
-    async updateBroadcastHeader(ctx, dataId, bgwHeader, authorizedUsersJson) {
+    async updateBroadcastHeader(ctx, dataId, bgwHeader, policyJson) {
         const dataBytes = await ctx.stub.getState('DATA_' + dataId);
         if (!dataBytes || dataBytes.length === 0) {
             throw new Error('Not found: ' + dataId);
         }
 
         const record = JSON.parse(dataBytes.toString());
+        const policy = this._parseJson(policyJson, {});
         record.bgwHeader = bgwHeader;
-        record.authorizedUsers = this._parseJson(authorizedUsersJson, record.authorizedUsers || []);
+        if (Array.isArray(policy.authorizedUsers)) {
+            record.authorizedUsers = policy.authorizedUsers;
+        }
+        if (Array.isArray(policy.grantedUsers)) {
+            record.grantedUsers = policy.grantedUsers;
+        }
+        if (Array.isArray(policy.revokedUsers)) {
+            record.revokedUsers = policy.revokedUsers;
+        }
         record.headerUpdatedAt = this._getTimestamp(ctx);
 
         await ctx.stub.putState(
@@ -149,7 +160,9 @@ console.log('UPDATE TOKEN:', updateToken);
         ctx.stub.setEvent('BEHeaderUpdated',
             Buffer.from(JSON.stringify({
                 dataId,
-                authorizedUsers: record.authorizedUsers
+                authorizedUsers: record.authorizedUsers,
+                grantedUsers: record.grantedUsers || [],
+                revokedUsers: record.revokedUsers || []
             })));
 
         return JSON.stringify(record);
@@ -168,7 +181,6 @@ console.log('UPDATE TOKEN:', updateToken);
         const record = JSON.parse(dataBytes.toString());
         record.requiredLevel = level;
         record.requiredLevelNum = levelMap[level];
-        record.requiredClearanceRank = this._clearanceRank(level);
         record.policyUpdatedAt = this._getTimestamp(ctx);
 
         await ctx.stub.putState(
@@ -203,6 +215,20 @@ console.log('UPDATE TOKEN:', updateToken);
         }
         await iterator.close();
         return JSON.stringify(results);
+    }
+
+    async wipeAll(ctx) {
+        const iterator = await ctx.stub.getStateByRange(
+            'DATA_', 'DATA_~');
+        let res = await iterator.next();
+        let count = 0;
+        while (!res.done) {
+            await ctx.stub.deleteState(res.value.key);
+            count++;
+            res = await iterator.next();
+        }
+        await iterator.close();
+        return JSON.stringify({ deleted: count, namespace: 'DATA' });
     }
 }
 

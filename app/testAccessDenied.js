@@ -51,6 +51,7 @@ await fabricService.assignLevel(
         patientId,
         cid,
         JSON.stringify(envelope.bgwHeader),
+        envelope.updateToken || '',
         'L0',
         [doctorId],
         payloadHash,

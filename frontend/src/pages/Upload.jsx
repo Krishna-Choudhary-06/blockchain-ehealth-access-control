@@ -7,6 +7,7 @@ import {
 } from 'react-icons/fi'
 import { uploadRecord } from '../services/apiService'
 import { useAuth } from '../hooks/useAuth'
+import { deriveRequiredLevel, levelLabel, roleAccessMap } from '../utils/privacyPolicy'
 
 function safeIdPart(value) {
   return String(value || '')
@@ -14,6 +15,14 @@ function safeIdPart(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+function safeJsonParse(value, fallback = {}) {
+  try {
+    return JSON.parse(value || JSON.stringify(fallback))
+  } catch {
+    return fallback
+  }
 }
 
 function makeRecordId(patientName, selectedFile) {
@@ -25,10 +34,7 @@ function makeRecordId(patientName, selectedFile) {
 export default function Upload() {
   const { user } = useAuth()
   const [patientName, setPatientName] = useState('')
-  const [sensitivityLevel, setSensitivityLevel] = useState('L0')
   const [dataCategory, setDataCategory] = useState('prescription')
-  const [recipientIdsText, setRecipientIdsText] = useState('')
-  const [authorizedUsersText, setAuthorizedUsersText] = useState('')
   const [file, setFile] = useState(null)
   const [fileError, setFileError] = useState('')
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -43,6 +49,28 @@ export default function Upload() {
   const fileInputRef = useRef(null)
   const [dragActive, setDragActive] = useState(false)
 
+  const categoryOptions = [
+    { value: 'prescription', label: 'Prescription', level: 'L0' },
+    { value: 'laboratory', label: 'Lab Report', level: 'L1' },
+    { value: 'medical_history', label: 'Medical History', level: 'L2' },
+    { value: 'billing', label: 'Billing', level: 'L3' }
+  ]
+
+  useEffect(() => {
+    if (user?.role === 'Patient' && !patientName) {
+      setPatientName(user.name || '')
+    }
+  }, [patientName, user])
+
+  useEffect(() => {
+    if (user?.role === 'Patient') {
+      setDataCategory('medical_history')
+    }
+  }, [user?.role])
+
+  const requiredLevel = deriveRequiredLevel(dataCategory)
+  const selectedCategoryLabel = categoryOptions.find((option) => option.value === dataCategory)?.label || 'Unknown'
+
   // Clean up Object URL to prevent memory leaks
   useEffect(() => {
     return () => {
@@ -52,61 +80,13 @@ export default function Upload() {
     }
   }, [previewUrl])
 
-  useEffect(() => {
-    const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
-    const allowed = users.filter(user => {
-      if (sensitivityLevel === 'L0') {
-        return ['Doctor', 'Admin'].includes(user.role)
-      }
-      if (sensitivityLevel === 'L1') {
-        return ['Doctor', 'Admin', 'Lab'].includes(user.role)
-      }
-      if (sensitivityLevel === 'L2') {
-        return ['Doctor', 'Admin', 'Nurse', 'Staff'].includes(user.role)
-      }
-      return true
-    })
-    const withBgw = allowed.filter(user => user.bgwRecipientId)
-    if (withBgw.length > 0) {
-      setRecipientIdsText(withBgw.map(user => user.bgwRecipientId).join(','))
-      setAuthorizedUsersText(withBgw.map(user => user.userId).join(','))
-    } else {
-      setRecipientIdsText('')
-      setAuthorizedUsersText('')
-    }
-  }, [sensitivityLevel])
-
-  useEffect(() => {
-    if (user?.role === 'Patient' && !patientName) {
-      setPatientName(user.name || '')
-    }
-  }, [patientName, user])
-
-  useEffect(() => {
-    if (user?.role === 'Nurse') {
-      setDataCategory('laboratory')
-      setSensitivityLevel('L2')
-    } else if (user?.role === 'Admin') {
-      setDataCategory('billing')
-      setSensitivityLevel('L3')
-    } else if (user?.role === 'Patient') {
-      setDataCategory('medical_history')
-    }
-  }, [user?.role])
-
   const currentUserKeys = user?.name
-    ? JSON.parse(localStorage.getItem(`user_keys_${user.name}`) || '{}')
+    ? safeJsonParse(localStorage.getItem(`user_keys_${user.name}`), {})
     : {}
-  const ownerId = user?.role === 'Patient'
-    ? (user.identityId || currentUserKeys.userId || safeIdPart(user.name))
-    : safeIdPart(patientName)
 
-  const sensitivityLevels = [
-    { code: 'L0', name: 'Doctor Only', desc: 'Restricted only to authorized doctors.', color: 'text-red-500 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30' },
-    { code: 'L1', name: 'Lab Access', desc: 'Access allowed for laboratory diagnostics.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/30' },
-    { code: 'L2', name: 'Authorized Staff', desc: 'Clinical support staffs and nurses access.', color: 'text-blue-500 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/30' },
-    { code: 'L3', name: 'Public', desc: 'Public health dataset or general access.', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30' }
-  ]
+  const ownerId = user?.role === 'Patient'
+    ? (user?.identityId || currentUserKeys.userId || safeIdPart(user?.name))
+    : safeIdPart(patientName)
 
   // File extension checks
   const validateFile = (selectedFile) => {
@@ -218,12 +198,48 @@ export default function Upload() {
     }
   }
 
+  const loadDemoRecord = () => {
+    const demoText = [
+      'Patient Name: John Doe',
+      'Diagnosis: Hypertension',
+      'Prescription: Amlodipine'
+    ].join('\n')
+
+    const demoFile = new File([demoText], 'demo_record.txt', { type: 'text/plain' })
+    setPatientName('patient1')
+    setDataCategory('prescription')
+    setFileError('')
+    setFile(demoFile)
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+    }
+
+    setPreviewUrl(URL.createObjectURL(demoFile))
+    setReportId(makeRecordId('patient1', demoFile))
+    toast.success('Demo record loaded into the upload form.')
+  }
+
   // Handle upload submission
   const handleSubmit = async (e) => {
     e.preventDefault()
 
     if (!patientName.trim()) {
-      toast.error('Patient Name is required.')
+      toast.error('Patient ID is required.')
+      return
+    }
+
+    const registeredUsers = safeJsonParse(localStorage.getItem('registered_users'), [])
+    const normalizedInput = patientName.trim().toLowerCase().replace(/\s+/g, '')
+    const patientExists = registeredUsers.some(u =>
+      u.role?.toLowerCase() === 'patient' && (
+        String(u.userId || '').toLowerCase().replace(/\s+/g, '') === normalizedInput ||
+        String(u.name || '').toLowerCase().replace(/\s+/g, '') === normalizedInput ||
+        String(u.email || '').toLowerCase().replace(/\s+/g, '') === normalizedInput
+      )
+    )
+    if (!patientExists) {
+      toast.error(`Patient "${patientName.trim()}" is not registered. Please register the patient first.`)
       return
     }
 
@@ -244,24 +260,8 @@ export default function Upload() {
     setResult(null)
 
     try {
-      const recipientIds = recipientIdsText
-        .split(',')
-        .map(value => Number(value.trim()))
-        .filter(value => Number.isInteger(value) && value > 0)
-      const authorizedUsers = authorizedUsersText
-        .split(',')
-        .map(value => value.trim())
-        .filter(Boolean)
-
-      if (recipientIds.length === 0) {
-        throw new Error('Enter at least one numeric BGW recipient index.')
-      }
-      if (authorizedUsers.length === 0) {
-        throw new Error('Enter at least one registered Fabric user id.')
-      }
-
       setProgress(25)
-      setCurrentStep('Preparing BGW recipient subset and access policy...')
+      setCurrentStep('Mapping category to privacy level and deriving authorized recipients...')
       
       setProgress(50)
       setCurrentStep('Sending medical file to backend for BGW encryption...')
@@ -274,37 +274,37 @@ export default function Upload() {
       const apiResult = await uploadRecord(
         patientName.replace(/ /g, ''),
         fileId,
-        sensitivityLevel,
         file,
         {
           category: dataCategory,
-          recipientIds,
-          authorizedUsers,
           ownerId,
+          ownerRecipientId: user?.bgwRecipientId || currentUserKeys.bgwRecipientId || '',
           uploadedBy: user?.identityId || currentUserKeys.userId || user?.name || '',
-          uploaderRole: user?.role || ''
+          uploaderRole: user?.role || '',
+          organization: user?.organization || currentUserKeys.organization || ''
         }
       )
       
       if (!apiResult.success) throw new Error(apiResult.error || 'Upload failed at backend')
       
       const cid = apiResult.ipfsHash || apiResult.data?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
+      const resolvedLevel = apiResult.requiredLevel || requiredLevel
 
       const txId = apiResult.txId || apiResult.data?.txId || apiResult.data?.transactionId || apiResult.payloadHash || fileId
       const certId = apiResult.certificateId || apiResult.data?.certificateId || `CERT-${fileId}`
 
-      // Store in localStorage patient records list so it can be retrieved across dashboards
       const ledgerRecord = {
         id: fileId,
         name: `${fileId}: ${file.name}`,
-        sensitivity: sensitivityLevel,
+        sensitivity: resolvedLevel,
         category: dataCategory,
         ipfsHash: cid,
         payloadHash: apiResult.payloadHash,
         uploadTime: new Date().toLocaleString(),
         bgwHeader: apiResult.bgwHeader,
-        recipients: recipientIds,
-        authorizedUsers,
+        updateToken: apiResult.data?.updateToken,
+        recipients: apiResult.recipients || [],
+        authorizedUsers: apiResult.authorizedUsers || [],
         ownerId,
         uploadedBy: user?.identityId || currentUserKeys.userId || user?.name || '',
         uploaderRole: user?.role || '',
@@ -316,8 +316,10 @@ export default function Upload() {
         txId
       }
 
-      const existingRecords = JSON.parse(localStorage.getItem('patient_records') || '[]')
-      localStorage.setItem('patient_records', JSON.stringify([ledgerRecord, ...existingRecords]))
+      const localRecords = JSON.parse(localStorage.getItem('patient_records') || '[]')
+      const nextLocalRecords = localRecords.filter((record) => record?.id !== fileId)
+      nextLocalRecords.push(ledgerRecord)
+      localStorage.setItem('patient_records', JSON.stringify(nextLocalRecords))
 
       setProgress(100)
       setCurrentStep('Completed')
@@ -331,10 +333,12 @@ export default function Upload() {
         fileSize: formatBytes(file.size),
         uploadTime: ledgerRecord.uploadTime,
         patientName: patientName,
-        sensitivityLevel: sensitivityLevel,
+        sensitivityLevel: resolvedLevel,
+        category: dataCategory,
         certificateId: certId
       })
 
+      window.dispatchEvent(new Event('records:updated'))
       setUploading(false)
       toast.success('Medical record securely committed to Blockchain and IPFS!')
     } catch (error) {
@@ -348,10 +352,7 @@ export default function Upload() {
 
   const handleReset = () => {
     setPatientName('')
-    setSensitivityLevel('L0')
     setDataCategory('prescription')
-    setRecipientIdsText('')
-    setAuthorizedUsersText('')
     setFile(null)
     setFileError('')
     if (previewUrl) {
@@ -435,13 +436,23 @@ export default function Upload() {
             
             {/* Form Section */}
             <div className="lg:col-span-7 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-850 p-6 md:p-8 rounded-3xl backdrop-blur-xl shadow-md dark:shadow-xl space-y-6">
-              <h2 className="text-xl font-bold text-slate-950 dark:text-white">Upload Specifications</h2>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <h2 className="text-xl font-bold text-slate-950 dark:text-white">Upload Specifications</h2>
+                <button
+                  type="button"
+                  onClick={loadDemoRecord}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border border-purple-500/20 text-purple-700 dark:text-purple-300 bg-purple-500/5 hover:bg-purple-500/10 transition-colors"
+                >
+                  <FiShield className="w-4 h-4" />
+                  Load demo_record.txt
+                </button>
+              </div>
               
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Patient Name field */}
+                {/* Patient ID field */}
                 <div className="space-y-1.5">
                   <label htmlFor="patientName" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
-                    Patient Name
+                    Patient ID
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -452,88 +463,72 @@ export default function Upload() {
                       id="patientName"
                       value={patientName}
                       onChange={(e) => setPatientName(e.target.value)}
-                      placeholder="Enter the patient name for this upload"
+                      placeholder="Enter the patient ID for this upload"
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl pl-10 pr-4 py-3.5 text-slate-950 dark:text-white placeholder-slate-400/80 focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
                     />
                   </div>
                 </div>
 
-                {/* Sensitivity level dropdown & details */}
                 <div className="space-y-2">
-                  <label htmlFor="sensitivity" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
-                    Sensitivity Level
+                  <label htmlFor="dataCategory" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
+                    Data Category
                   </label>
                   <select
-                    id="sensitivity"
-                    value={sensitivityLevel}
-                    onChange={(e) => setSensitivityLevel(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm cursor-pointer appearance-none bg-no-repeat bg-[right_1.25rem_center] bg-[length:1.25em_1.25em]"
-                    style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`
-                    }}
+                    id="dataCategory"
+                    value={dataCategory}
+                    onChange={(e) => setDataCategory(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
                   >
-                    <option value="L0">L0 — Doctor Only</option>
-                    <option value="L1">L1 — Lab Access</option>
-                    <option value="L2">L2 — Authorized Staff</option>
-                    <option value="L3">L3 — Public Access</option>
+                    {categoryOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
 
-                  {/* Level Context Alert */}
-                  <div className={`p-4 rounded-2xl border text-xs leading-relaxed flex items-start gap-3 transition-colors duration-300 ${sensitivityLevels.find(l => l.code === sensitivityLevel).color}`}>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-850 bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400">
+                      Selected Type: {selectedCategoryLabel}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-full border border-purple-200 dark:border-purple-900/40 bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 font-bold">
+                      Required Level: {requiredLevel}
+                    </span>
+                  </div>
+
+                  <div className="p-4 rounded-2xl border text-xs leading-relaxed flex items-start gap-3 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-900/30 text-purple-700 dark:text-purple-300">
                     <FiShield className="w-5 h-5 flex-shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold block mb-0.5">Privacy Config: {sensitivityLevels.find(l => l.code === sensitivityLevel).name}</span>
-                      {sensitivityLevels.find(l => l.code === sensitivityLevel).desc}
+                      <span className="font-bold block mb-0.5">Automatic Mapping</span>
+                      The system automatically maps category to privacy level and derives BGW recipients. You do not need to select doctors or recipient IDs.
                     </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label htmlFor="dataCategory" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
-                      Data Category
-                    </label>
-                    <select
-                      id="dataCategory"
-                      value={dataCategory}
-                      onChange={(e) => setDataCategory(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
-                    >
-                      <option value="prescription">Prescriptions - L0</option>
-                      <option value="laboratory">Laboratory Reports - L1</option>
-                      <option value="medical_history">Medical History - L2</option>
-                      <option value="billing">Billing Information - L3</option>
-                      <option value="insurance">Insurance / Claims - L3</option>
-                      <option value="discharge_summary">Discharge Summary - L2</option>
-                      <option value="administrative">Administrative Document - L3</option>
-                    </select>
+                  <div className="p-3 rounded-2xl border border-slate-200 dark:border-slate-850 bg-slate-50 dark:bg-slate-950/40 text-xs space-y-2">
+                    <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <FiShield className="w-3 h-3" />
+                      Who Can Access This Record
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(roleAccessMap).map(([role, levels]) => {
+                        const canAccess = levels.includes(requiredLevel)
+                        return (
+                          <span key={role} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                            canAccess
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
+                              : 'bg-slate-200/50 dark:bg-slate-900/30 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-850 line-through decoration-1'
+                          }`}>
+                            {canAccess ? role : <span className="line-through decoration-1">{role}</span>}
+                          </span>
+                        )
+                      })}
+                    </div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 pt-1 border-t border-slate-200 dark:border-slate-850/50">
+                      {requiredLevel === 'L0' && 'Only Doctors can access prescriptions (L0).'}
+                      {requiredLevel === 'L1' && 'Doctors and Lab Technicians can access lab reports (L1).'}
+                      {requiredLevel === 'L2' && 'Doctors, Nurses, and Staff can access medical history (L2).'}
+                      {requiredLevel === 'L3' && 'All roles including Public can access billing records (L3).'}
+                    </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="recipientIds" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
-                      BGW Recipient Indexes
-                    </label>
-                    <input
-                      id="recipientIds"
-                      value={recipientIdsText}
-                      onChange={(e) => setRecipientIdsText(e.target.value)}
-                      placeholder="e.g. 1,2,5"
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white placeholder-slate-400/80 focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="authorizedUsers" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
-                    Authorized Fabric User IDs
-                  </label>
-                  <input
-                    id="authorizedUsers"
-                    value={authorizedUsersText}
-                    onChange={(e) => setAuthorizedUsersText(e.target.value)}
-                    placeholder="Comma-separated registered user IDs"
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-950 dark:text-white placeholder-slate-400/80 focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
-                  />
                 </div>
 
                 {/* File Upload drag area */}
@@ -652,7 +647,7 @@ export default function Upload() {
                             {/* PDF metadata container to look like a standard reader view */}
                             <div className="border border-slate-250 dark:border-slate-900 rounded-xl p-4 bg-white dark:bg-slate-900/50 text-[10px] text-slate-400 text-left font-mono space-y-2 h-24 overflow-hidden mask-fade-bottom">
                               <p className="font-bold border-b border-slate-100 dark:border-slate-800 pb-1 text-slate-600 dark:text-slate-355">MEDICAL CASE SUMMARY</p>
-                              <p>Patient Name: {patientName || 'N/A'}</p>
+                              <p>Patient ID: {patientName || 'N/A'}</p>
                               <p>Report ID: {reportId || 'N/A'}</p>
                               <p>Verification Hash: SECURE_LOCAL_BUFFER_SHA256</p>
                             </div>
@@ -784,9 +779,9 @@ export default function Upload() {
                       </div>
 
                       <div className="flex justify-between">
-                        <span className="font-semibold text-slate-450 dark:text-slate-500">Clearance Required:</span>
+                        <span className="font-semibold text-slate-450 dark:text-slate-500">Privacy Level:</span>
                         <span className="font-bold font-mono text-purple-600 dark:text-purple-450 bg-purple-50 dark:bg-purple-900/10 px-2 py-0.5 rounded border border-purple-100 dark:border-purple-900/30">
-                          {result.sensitivityLevel}
+                          {result.sensitivityLevel} · {levelLabel(result.sensitivityLevel)}
                         </span>
                       </div>
 

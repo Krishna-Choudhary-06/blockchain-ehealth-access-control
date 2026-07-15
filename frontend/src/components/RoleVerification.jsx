@@ -1,7 +1,24 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { CheckCircle2, ShieldCheck, Heart, UserCheck, ArrowRight } from 'lucide-react'
 
-export default function RoleVerification({ verifiedUser, onProceed, onPatientBypass }) {
+export default function RoleVerification({ verifiedUser, onProceed, onPatientBypass, autoProceed = false }) {
+  const didAutoProceed = useRef(false)
+
+  useEffect(() => {
+    if (!autoProceed || didAutoProceed.current || !verifiedUser) return
+
+    didAutoProceed.current = true
+    const timeout = setTimeout(() => {
+      if (verifiedUser.role === 'Patient') {
+        onPatientBypass?.()
+      } else {
+        onProceed?.()
+      }
+    }, 350)
+
+    return () => clearTimeout(timeout)
+  }, [autoProceed, onPatientBypass, onProceed, verifiedUser])
+
   if (!verifiedUser) return null
 
   const { name, identityId, role, organization } = verifiedUser

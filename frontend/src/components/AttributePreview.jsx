@@ -20,11 +20,11 @@ const rolePermissions = {
     { text: 'Download Medical History', allowed: true },
     { text: 'Update Records directly', allowed: false }
   ],
-  Accountant: [
-    { text: 'View Medical Billing Records', allowed: true },
-    { text: 'Process Insurance Claims', allowed: true },
-    { text: 'Access Department Financials', allowed: true },
-    { text: 'Access Clinical Diagnostics Data', allowed: false }
+  'Lab Technician': [
+    { text: 'View Lab Test Results', allowed: true },
+    { text: 'Record Diagnostic Data', allowed: true },
+    { text: 'Access Lab Department Records', allowed: true },
+    { text: 'Access Clinical Prescriptions', allowed: false }
   ],
   Admin: [
     { text: 'Manage Users & Role Registry', allowed: true },
@@ -138,6 +138,10 @@ export default function AttributePreview({ formData }) {
               </span>
             </div>
           ))}
+        </div>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl p-3">
+          <strong className="text-slate-700 dark:text-slate-200">Owner access:</strong>{' '}
+          The record owner always retains full access regardless of privacy level.
         </div>
       </div>
 

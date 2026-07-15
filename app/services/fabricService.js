@@ -82,6 +82,18 @@ async function getAllUsers() {
     }
 }
 
+async function getAllLevels() {
+    const { contract, gateway } = await getContract();
+    try {
+        const result = await contract.evaluateTransaction(
+            'PrivacyLevel:getAllLevels'
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
 async function storeHash(
     dataId,
     patientId,
@@ -92,18 +104,22 @@ async function storeHash(
     authorizedUsers = [],
     payloadHash = '',
     category = '',
-    metadata = {}
+    metadata = {},
+    grantedUsers = [],
+    revokedUsers = []
 ){
     const { contract, gateway } = await getContract();
     try {
         const headerBundle = {
-    bgwHeader: JSON.parse(bgwHeader),
-    updateToken,
-    authorizedUsers,
-    payloadHash,
-    category,
-    metadata
-};
+            bgwHeader: JSON.parse(bgwHeader),
+            updateToken,
+            authorizedUsers,
+            grantedUsers,
+            revokedUsers,
+            payloadHash,
+            category,
+            metadata
+        };
         const result = await contract.submitTransaction(
             'DataStorage:storeHash',
             dataId,
@@ -118,14 +134,14 @@ async function storeHash(
     }
 }
 
-async function updateBroadcastHeader(dataId, bgwHeader, authorizedUsers = []) {
+async function updateBroadcastHeader(dataId, bgwHeader, policy = {}) {
     const { contract, gateway } = await getContract();
     try {
         const result = await contract.submitTransaction(
             'DataStorage:updateBroadcastHeader',
             dataId,
             bgwHeader,
-            JSON.stringify(authorizedUsers)
+            JSON.stringify(policy)
         );
         return JSON.parse(result.toString());
     } finally {
@@ -200,6 +216,7 @@ module.exports = {
     registerUser,
     assignLevel,
     getAllUsers,
+    getAllLevels,
     storeHash,
     updateBroadcastHeader,
     updatePrivacyLevel,

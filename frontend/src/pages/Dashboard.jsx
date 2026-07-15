@@ -5,9 +5,18 @@ import toast from 'react-hot-toast'
 import { 
   FiFileText, FiUserCheck, FiCpu, FiUsers, FiHardDrive, FiActivity,
   FiShield, FiSettings, FiUser, FiCheck, FiX, FiCopy, 
-  FiAlertTriangle, FiLock, FiUnlock, FiKey, FiDownload, FiExternalLink
+  FiAlertTriangle, FiLock, FiUnlock, FiKey, FiDownload, FiExternalLink,
+  FiEye
 } from 'react-icons/fi'
-import { getLogs, getDataRecords, getUsers, requestAccessAndDecrypt } from '../services/apiService'
+import { roleCanAccessLevel, levelLabel } from '../utils/privacyPolicy'
+import {
+  getLogs,
+  getDataRecords,
+  getUsers,
+  requestAccessAndDecrypt,
+  addRecipients,
+  removeRecipients
+} from '../services/apiService'
 
 const TEST_PREFIXES = [
   'doctor_paper_',
@@ -17,14 +26,6 @@ const TEST_PREFIXES = [
   'record_full_',
   'data_bgw_'
 ]
-
-function readJson(key, fallback) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
-  } catch {
-    return fallback
-  }
-}
 
 function isTestArtifact(value = '') {
   const text = String(value).toLowerCase()
@@ -39,8 +40,26 @@ function isRealRecord(record) {
   return !isTestArtifact(record.dataId || record.id)
 }
 
+function parseJson(value, fallback) {
+  try {
+    if (value == null || value === '') return fallback
+    if (typeof value === 'object') return value
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
+  } catch {
+    return fallback
+  }
+}
+
 function hasEncryptedPayload(record) {
-  return Boolean(record?.id && record?.ipfsHash && record?.payloadHash && record?.bgwHeader)
+  return Boolean(record?.id && record?.ipfsHash && record?.payloadHash && (record?.bgwHeader || record?.updateToken))
 }
 
 function isLocalRecordUsable(record) {
@@ -61,6 +80,23 @@ function formatDateTime(value) {
 function getCurrentUserKeys(user) {
   if (!user?.name) return {}
   return readJson(`user_keys_${user.name}`, {})
+}
+
+function isUserRecordOwner(record, userId) {
+  if (!userId) return false
+  const uploaderCandidates = [
+    record?.uploadedBy,
+    record?.metadata?.uploadedBy
+  ]
+  return uploaderCandidates.some(candidate => safeCompare(candidate) === safeCompare(userId))
+}
+
+function isUserRecordSubject(record, userId) {
+  if (!userId) return false
+  return (
+    safeCompare(record?.patientId) === safeCompare(userId) ||
+    safeCompare(record?.metadata?.patientId) === safeCompare(userId)
+  )
 }
 
 function base64ToBytes(base64) {
@@ -91,16 +127,21 @@ function safeCompare(value = '') {
 }
 
 export default function Dashboard() {
-  console.log("DASHBOARD COMPONENT RENDERED")
   const { user } = useAuth()
   const role = user?.role || 'Patient'
   const location = useLocation()
   const hash = location.hash || ''
 
-  const [networkUsers, setNetworkUsers] = useState(() => readJson('registered_users', []).length)
+  const [networkUsers, setNetworkUsers] = useState(0)
   const [fabricUsers, setFabricUsers] = useState([])
   const [accessLogs, setAccessLogs] = useState([])
-  const [patientRecords, setPatientRecords] = useState(() => readJson('patient_records', []).filter(isLocalRecordUsable))
+  const [patientRecords, setPatientRecords] = useState([])
+  const [recordsLoading, setRecordsLoading] = useState(true)
+  const [grantRecord, setGrantRecord] = useState(null)
+  const [grantMode, setGrantMode] = useState('grant')
+  const [recipientId, setRecipientId] = useState('')
+  const [authorizedUser, setAuthorizedUser] = useState('')
+  const [granting, setGranting] = useState(false)
 
   // Doctor Specific States (for decrypting files)
   const [selectedRecordToDecrypt, setSelectedRecordToDecrypt] = useState(null)
@@ -119,6 +160,74 @@ export default function Dashboard() {
   const handleCopy = (text) => {
     navigator.clipboard.writeText(text)
     toast.success('Copied to clipboard!')
+  }
+
+  const refreshRecords = async () => {
+    setRecordsLoading(true)
+    try {
+      const response = await getDataRecords()
+      if (response.success && Array.isArray(response.data)) {
+        const chainRecords = response.data
+          .filter(isRealRecord)
+          .map((record) => {
+            const bgwHeader = parseJson(record.bgwHeader, null)
+            const recipients = Array.isArray(bgwHeader?.recipientIds)
+              ? bgwHeader.recipientIds.map(Number)
+              : parseJson(record.metadata?.recipients, [])
+            const authorizedUsers = Array.isArray(record.authorizedUsers)
+              ? record.authorizedUsers
+              : []
+
+            return {
+              id: record.dataId,
+              name: `${record.dataId}: ${record.metadata?.filename || record.category || 'Medical Record'}`,
+              sensitivity: record.requiredLevel,
+              category: record.category,
+              ipfsHash: record.ipfsHash,
+              payloadHash: record.payloadHash,
+              bgwHeader,
+              updateToken: record.updateToken,
+              authorizedUsers,
+              recipients,
+              uploadTime: record.storedAt,
+              patientName: record.patientId,
+              patientId: record.patientId,
+              ownerId: record.metadata?.ownerId,
+              uploadedBy: record.metadata?.uploadedBy,
+              uploaderRole: record.metadata?.uploaderRole,
+              fileName: record.metadata?.filename || record.dataId,
+              encryptionStatus: bgwHeader && record.updateToken
+                ? 'BGW Broadcast Encryption + AES-256-GCM'
+                : 'Legacy / Non-BGW Record',
+              source: 'fabric',
+              organization: record.metadata?.organization || '',
+              metadata: record.metadata || {},
+              revokedUsers: record.revokedUsers || [],
+              grantedUsers: record.grantedUsers || [],
+              rawRecord: record
+            }
+          })
+
+        const saved = readJson('patient_records', [])
+          .filter(isLocalRecordUsable)
+          .map((record) => ({
+            ...record,
+            source: 'legacy',
+            encryptionStatus: record.encryptionStatus || 'Legacy / Non-BGW Record'
+          }))
+
+        setPatientRecords([
+          ...chainRecords,
+          ...saved.filter((local) => !chainRecords.some((chain) => chain.id === local.id))
+        ])
+      }
+    } catch (err) {
+      console.error('Failed to load Fabric data records', err)
+      const fallback = readJson('patient_records', []).filter(isLocalRecordUsable)
+      setPatientRecords(fallback.map((record) => ({ ...record, source: 'legacy' })))
+    } finally {
+      setRecordsLoading(false)
+    }
   }
 
   // Decryption action for Doctor
@@ -146,7 +255,8 @@ export default function Dashboard() {
           docKeys.userId,
           record.id,
           docKeys.bgwPrivateKey,
-          docKeys.bgwPublicKey
+          docKeys.bgwPublicKey,
+          role
         )
         if (!response.success) {
           throw new Error(response.error || response.access?.message || 'Access denied by Fabric policy.')
@@ -177,7 +287,76 @@ export default function Dashboard() {
       setIsDecrypting(false)
     }
   }
+  const handleGrantAccess = async () => {
+    if (!grantRecord) return
 
+    try {
+      setGranting(true)
+      const nextRecipientId = Number(recipientId)
+      if (!Number.isInteger(nextRecipientId) || nextRecipientId <= 0) {
+        throw new Error('Recipient ID must be a positive integer.')
+      }
+      if (!authorizedUser.trim()) {
+        throw new Error('Authorized user is required.')
+      }
+
+      const response = await addRecipients(
+        grantRecord.id,
+        [nextRecipientId],
+        [authorizedUser.trim()],
+        currentUserId
+      )
+
+      if (!response.success) {
+        throw new Error(response.error || 'Grant access failed')
+      }
+
+      toast.success('Access granted successfully')
+      setGrantRecord(null)
+      setGrantMode('grant')
+      setRecipientId('')
+      setAuthorizedUser('')
+      await refreshRecords()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setGranting(false)
+    }
+  }
+
+  const handleRevokeAccess = async () => {
+    if (!grantRecord) return
+
+    try {
+      setGranting(true)
+      const nextRecipientId = Number(recipientId)
+      if (!Number.isInteger(nextRecipientId) || nextRecipientId <= 0) {
+        throw new Error('Recipient ID must be a positive integer.')
+      }
+
+      const response = await removeRecipients(
+        grantRecord.id,
+        [nextRecipientId],
+        authorizedUser.trim() ? [authorizedUser.trim()] : [],
+        currentUserId
+      )
+
+      if (!response.success) {
+        throw new Error(response.error || 'Remove access failed')
+      }
+
+      toast.success('Access revoked successfully')
+      setGrantRecord(null)
+      setGrantMode('grant')
+      setRecipientId('')
+      setAuthorizedUser('')
+      await refreshRecords()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setGranting(false)
+    }
+  }
   useEffect(() => {
     return () => {
       if (decryptedFile?.url) URL.revokeObjectURL(decryptedFile.url)
@@ -187,6 +366,54 @@ export default function Dashboard() {
   const registeredUsers = readJson('registered_users', [])
   const currentKeys = getCurrentUserKeys(user)
   const currentUserId = user?.identityId || currentKeys.userId || ''
+  const currentOrganization = user?.organization || currentKeys.organization || ''
+
+  const getIdentityOrganization = (identityValue) => {
+    const normalized = safeCompare(identityValue)
+    if (!normalized) return ''
+
+    const directMatch = registeredUsers.find((item) => {
+      const itemId = safeCompare(item.userId || item.identityId || '')
+      const itemName = safeCompare(item.name || '')
+      return itemId === normalized || itemName === normalized
+    })
+
+    if (directMatch?.organization) {
+      return directMatch.organization
+    }
+
+    const keyMatch = registeredUsers.find((item) => safeCompare(item.name || '') === normalized)
+    if (keyMatch?.organization) {
+      return keyMatch.organization
+    }
+
+    return ''
+  }
+
+  const getRecordHospital = (record) => {
+    const orgFromRecord =
+      record.organization ||
+      record.patientOrganization ||
+      record.metadata?.organization ||
+      record.metadata?.hospital ||
+      record.metadata?.org ||
+      ''
+
+    if (orgFromRecord) return orgFromRecord
+
+    const patientIdentity = record.patientId || record.patientName || record.ownerId || ''
+    return getIdentityOrganization(patientIdentity)
+  }
+
+  const matchesHospitalScope = (record) => {
+    if (role === 'Patient') return true
+    if (currentKeys.userId && Array.isArray(record.grantedUsers) && record.grantedUsers.includes(currentKeys.userId)) return true
+    if (!currentOrganization) return true
+    const recordHospital = getRecordHospital(record)
+    if (!recordHospital) return false
+    return safeCompare(recordHospital) === safeCompare(currentOrganization)
+  }
+
   const isOwnedByCurrentPatient = (record) => {
     if (role !== 'Patient') return true
     const normalizedName = safeCompare(user?.name)
@@ -197,7 +424,7 @@ export default function Dashboard() {
       safeCompare(record.patientId) === safeCompare(currentUserId)
     )
   }
-  const visibleRecords = patientRecords.filter(isOwnedByCurrentPatient)
+  const visibleRecords = patientRecords.filter(isOwnedByCurrentPatient).filter(matchesHospitalScope)
   const visibleRecordIds = new Set(visibleRecords.map(record => record.id))
   const relevantAccessLogs = role === 'Patient'
     ? accessLogs.filter(log => visibleRecordIds.has(log.dataId))
@@ -209,10 +436,7 @@ export default function Dashboard() {
     (!currentKeys.userId || log.requesterId === currentKeys.userId || log.requesterId === user?.identityId)
   ).length
   const authorizedClinicalUsers = registeredUsers.filter(item => ['Doctor', 'Nurse', 'Lab', 'Staff'].includes(item.role)).length
-  const accessibleRecords = visibleRecords.filter(record => {
-    if (!record.authorizedUsers?.length) return true
-    return currentKeys.userId ? record.authorizedUsers.includes(currentKeys.userId) : false
-  })
+  const accessibleRecords = visibleRecords
   const assignedPatients = new Set(accessibleRecords.map(record => record.patientName || record.patientId).filter(Boolean)).size
   const patientAccessHistory = relevantAccessLogs.map((log, index) => {
     const date = new Date(log.time)
@@ -254,6 +478,16 @@ export default function Dashboard() {
       { id: 2, label: 'Access Requests Granted', value: `${successfulReads}`, icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
       { id: 3, label: 'Denied Requests', value: `${deniedLogs.length}`, icon: FiActivity, color: 'text-amber-600 bg-amber-500/10' }
     ],
+    'Lab Technician': [
+      { id: 1, label: 'Records Accessible', value: `${accessibleRecords.length}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
+      { id: 2, label: 'Successful Reads', value: `${successfulReads}`, icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
+      { id: 3, label: 'Access Log Entries', value: `${accessLogs.length}`, icon: FiHardDrive, color: 'text-amber-600 bg-amber-500/10' }
+    ],
+    Accountant: [
+      { id: 1, label: 'Records Accessible', value: `${accessibleRecords.length}`, icon: FiFileText, color: 'text-purple-600 bg-purple-500/10' },
+      { id: 2, label: 'Successful Reads', value: `${successfulReads}`, icon: FiUserCheck, color: 'text-blue-600 bg-blue-500/10' },
+      { id: 3, label: 'Access Log Entries', value: `${accessLogs.length}`, icon: FiHardDrive, color: 'text-amber-600 bg-amber-500/10' }
+    ],
     Admin: [
       { id: 1, label: 'Peer Nodes Connected', value: '4 / 4', icon: FiCpu, color: 'text-emerald-600 bg-emerald-500/10' },
       { id: 2, label: 'Registered Network Users', value: `${networkUsers}`, icon: FiUsers, color: 'text-purple-600 bg-purple-500/10' },
@@ -263,32 +497,28 @@ export default function Dashboard() {
 
   const activeStats = statCards[role] || statCards.Patient
   useEffect(() => {
-  const loadLogs = async () => {
-    try {
-      const response = await getLogs()
-      if (response.success) {
-        setAccessLogs(
-  response.data.filter(isRealLog).sort(
-    (a, b) => new Date(b.time) - new Date(a.time)
-  )
-)
+    const loadLogs = async () => {
+      try {
+        const response = await getLogs()
+        if (response.success) {
+          setAccessLogs(
+            response.data.filter(isRealLog).sort(
+              (a, b) => new Date(b.time) - new Date(a.time)
+            )
+          )
+        }
+      } catch (err) {
+        console.error('Failed to load logs', err)
       }
-    } catch (err) {
-      console.error('Failed to load logs', err)
     }
-  }
 
-  loadLogs()
-}, [])
-
-  useEffect(() => {
     const loadUsers = async () => {
       const localUsers = readJson('registered_users', [])
       try {
         const response = await getUsers()
         if (response.success && Array.isArray(response.data)) {
           setFabricUsers(response.data)
-          setNetworkUsers(Math.max(localUsers.length, response.data.filter(user => !isTestArtifact(user.userId)).length))
+          setNetworkUsers(Math.max(localUsers.length, response.data.filter((entry) => !isTestArtifact(entry.userId)).length))
           return
         }
       } catch (err) {
@@ -297,46 +527,9 @@ export default function Dashboard() {
       setNetworkUsers(localUsers.length)
     }
 
+    loadLogs()
     loadUsers()
-  }, [])
-
-  useEffect(() => {
-    const loadDataRecords = async () => {
-      try {
-        const response = await getDataRecords()
-        if (response.success && Array.isArray(response.data)) {
-          const chainRecords = response.data.filter(isRealRecord).map(record => ({
-            id: record.dataId,
-            name: `${record.dataId}: ${record.metadata?.filename || record.category || 'Medical Record'}`,
-            sensitivity: record.requiredLevel,
-            category: record.category,
-            ipfsHash: record.ipfsHash,
-            payloadHash: record.payloadHash,
-            bgwHeader: record.bgwHeader,
-            authorizedUsers: record.authorizedUsers || [],
-            uploadTime: record.storedAt,
-            patientName: record.patientId,
-            patientId: record.patientId,
-            ownerId: record.metadata?.ownerId,
-            uploadedBy: record.metadata?.uploadedBy,
-            uploaderRole: record.metadata?.uploaderRole,
-            fileName: record.metadata?.filename || record.dataId,
-            encryptionStatus: 'BGW Broadcast Encryption + AES-256-GCM'
-          }))
-          const saved = readJson('patient_records', []).filter(isLocalRecordUsable)
-          localStorage.setItem('patient_records', JSON.stringify(saved))
-          const merged = [
-            ...chainRecords,
-            ...saved.filter(local => !chainRecords.some(chain => chain.id === local.id))
-          ]
-          setPatientRecords(merged)
-        }
-      } catch (err) {
-        console.error('Failed to load Fabric data records', err)
-      }
-    }
-
-    loadDataRecords()
+    refreshRecords()
   }, [])
 
   // Helper check for clearance badges (implementing Section 5 Access Matrix)
@@ -499,7 +692,19 @@ export default function Dashboard() {
           </div>
         )}
         {visibleRecords.map((record) => (
-          <div key={record.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
+          <div
+            key={record.id}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4 transition-transform duration-150 hover:-translate-y-0.5"
+            onClick={() => setSelectedRecordToDecrypt(record)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                setSelectedRecordToDecrypt(record)
+              }
+            }}
+          >
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h4 className="text-base font-bold text-slate-900 dark:text-white">{record.name}</h4>
@@ -514,9 +719,60 @@ export default function Dashboard() {
               </div>
               <div className="flex items-center space-x-3">
                 <span className="text-[10px] font-mono text-slate-400 dark:text-slate-550 block">Uploaded: {record.uploadTime}</span>
-                <span className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                  Level {record.sensitivity}
+                <span className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20" title={`${levelLabel(record.sensitivity)} — ${record.sensitivity}`}>
+                  {record.sensitivity} · {levelLabel(record.sensitivity)}
                 </span>
+                <span className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold border ${
+                  record.bgwHeader && record.updateToken
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                    : 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20'
+                }`}>
+                  {record.bgwHeader && record.updateToken ? 'BGW Enabled' : 'Legacy'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Recipients</div>
+                <div className="mt-1 font-mono text-slate-700 dark:text-slate-300">
+                  {Array.isArray(record.recipients) && record.recipients.length > 0 ? record.recipients.join(', ') : 'Not specified'}
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Authorized Users</div>
+                <div className="mt-1 font-mono text-slate-700 dark:text-slate-300">
+                  {Array.isArray(record.authorizedUsers) && record.authorizedUsers.length > 0 ? record.authorizedUsers.join(', ') : 'Not specified'}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+              <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold flex items-center gap-1.5">
+                  <FiUserCheck className="w-3 h-3 text-emerald-500" />
+                  Granted Users
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1" title={Array.isArray(record.grantedUsers) ? record.grantedUsers.join(', ') : ''}>
+                  {Array.isArray(record.grantedUsers) && record.grantedUsers.length > 0
+                    ? record.grantedUsers.map((u, i) => (
+                        <span key={i} className="inline-block px-1.5 py-0.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-mono font-medium">{u}</span>
+                      ))
+                    : <span className="text-slate-400 italic text-[10px]">Not specified</span>}
+                </div>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold flex items-center gap-1.5">
+                  <FiX className="w-3 h-3 text-rose-500" />
+                  Revoked Users
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1" title={Array.isArray(record.revokedUsers) ? record.revokedUsers.join(', ') : ''}>
+                  {Array.isArray(record.revokedUsers) && record.revokedUsers.length > 0
+                    ? record.revokedUsers.map((u, i) => (
+                        <span key={i} className="inline-block px-1.5 py-0.5 bg-rose-500/10 text-rose-700 dark:text-rose-300 rounded-md text-[10px] font-mono font-medium">{u}</span>
+                      ))
+                    : <span className="text-slate-400 italic text-[10px]">Not specified</span>}
+                </div>
               </div>
             </div>
 
@@ -550,6 +806,57 @@ export default function Dashboard() {
                 {record.sensitivity === 'L1' && "* L1 grants authorization rights to Doctors and Laboratory technicians."}
                 {record.sensitivity === 'L2' && "* L2 opens clearance to General Staff, Nurses, Doctors and Laboratories."}
                 {record.sensitivity === 'L3' && "* L3 ledger files are cleared for public access without authentication parameters."}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 space-y-0.5">
+                <div className="flex items-center gap-1"><FiUser className="w-3 h-3" /> Owner: <span className="font-semibold text-slate-700 dark:text-slate-300">{record.ownerId || 'Not specified'}</span></div>
+                <div className="flex items-center gap-1"><FiEye className="w-3 h-3" /> Uploaded By: <span className="font-semibold text-slate-700 dark:text-slate-300">{record.uploadedBy || 'Not specified'}</span> {record.uploaderRole ? <span className="text-slate-400">({record.uploaderRole})</span> : null}</div>
+                <div className="flex items-center gap-1"><FiFileText className="w-3 h-3" /> Patient: <span className="font-semibold text-slate-700 dark:text-slate-300">{record.patientName || record.patientId || 'Not specified'}</span></div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {record.bgwHeader && record.updateToken && isUserRecordOwner(record, currentUserId) ? (
+                  <>
+                    <button
+                      onClick={() => handleDecrypt(record)}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm"
+                    >
+                      View / Decrypt
+                    </button>
+                    <button
+                      onClick={() => {
+                        setGrantMode('grant')
+                        setGrantRecord(record)
+                      }}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm"
+                    >
+                      Grant Access
+                    </button>
+                    <button
+                      onClick={() => {
+                        setGrantMode('revoke')
+                        setGrantRecord(record)
+                      }}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-sm"
+                    >
+                      Revoke Access
+                    </button>
+                  </>
+                ) : record.bgwHeader && record.updateToken ? (
+                  <>
+                    <button
+                      onClick={() => handleDecrypt(record)}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm"
+                    >
+                      View / Decrypt
+                    </button>
+                  </>
+                ) : (
+                  <span className="px-4 py-2 bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800">
+                    Legacy Record
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -615,137 +922,214 @@ export default function Dashboard() {
     </div>
   )
 
-  // 4. DOCTOR RECORDS LIST
-  const renderDoctorRecords = () => {
-    // Map patient records to Doctor's workspace records
-    const doctorPatients = accessibleRecords.map(rec => {
-      return {
-        id: rec.id,
-        patient: rec.patientName || rec.patientId || 'Registered patient',
-        file: rec.fileName || rec.name,
-        sensitivity: rec.sensitivity,
-        authorized: true,
-        rawRecord: rec
-      }
-    })
-
+  // 4. UNIFIED CLINICAL RECORDS WORKSPACE (Doctor, Nurse, Admin, Lab Technician)
+  const renderClinicalRecords = () => {
+    const isPatientView = role === 'Patient'
     return (
       <div className="space-y-8">
         <div>
-          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">Patient Records Workspace</h2>
-          <p className="text-slate-505 dark:text-slate-400 text-xs mt-1">Decrypt and inspect active patient health records authorized by ABAC consensus.</p>
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">{isPatientView ? 'My Records' : 'Organization Patient Records'}</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">{isPatientView ? 'Your medical records stored on the blockchain ledger.' : 'All patient records within your organization. Decryption is gated by ABAC policy, access grants, and privacy levels.'}</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">Accessible Ledger Files</h3>
-            <div className="divide-y divide-slate-100 dark:divide-slate-800/40 space-y-3">
-              {doctorPatients.length === 0 && (
-                <div className="pt-3 text-xs text-slate-500 dark:text-slate-400">
-                  No uploaded BGW/IPFS records are available for this identity yet.
-                </div>
-              )}
-              {doctorPatients.map((rec) => (
-                <div key={rec.id} className="pt-3 flex items-center justify-between gap-3 first:pt-0">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">{rec.file}</h4>
-                    <span className="text-[10px] text-slate-450 block">Patient: {rec.patient} | Sensitivity: {rec.sensitivity}</span>
-                  </div>
-                  <button 
-                    onClick={() => handleDecrypt(rec.rawRecord || rec)}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-purple-600/10 cursor-pointer"
-                  >
-                    Decrypt & Read
-                  </button>
-                </div>
-              ))}
+        <div className="grid grid-cols-1 gap-4">
+          {accessibleRecords.length === 0 && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm text-sm text-slate-500 dark:text-slate-400">
+              No records are available yet.
             </div>
+          )}
+          {accessibleRecords.map((record) => {
+            const isBgwRecord = Boolean(record.bgwHeader && record.updateToken)
+            const isUploader = isUserRecordOwner(record, currentUserId)
+            const isRevoked = currentKeys.userId && record.revokedUsers?.includes(currentKeys.userId)
+            const authUsers = Array.isArray(record.authorizedUsers) ? record.authorizedUsers : []
+            const revUsers = Array.isArray(record.revokedUsers) ? record.revokedUsers : []
+            return (
+              <div key={record.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-5 rounded-3xl shadow-sm space-y-4">
+                {/* Row 1: File name + badge + actions */}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate max-w-[400px]" title={record.fileName || record.name}>
+                        {record.fileName || record.name}
+                      </h4>
+                      <span className="px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-bold font-mono" title={`${levelLabel(record.sensitivity)} — ${record.sensitivity}`}>{record.sensitivity} · {levelLabel(record.sensitivity)}</span>
+                      <span className={`px-2 py-0.5 rounded-xl text-[10px] font-bold font-mono ${isBgwRecord ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-slate-500/10 text-slate-500'}`}>
+                        {isBgwRecord ? 'BGW' : 'Legacy'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0">
+                    {isRevoked ? (
+                      <span className="px-3 py-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-[11px] font-bold">Revoked</span>
+                    ) : isBgwRecord ? (
+                      <>
+                        <button onClick={() => handleDecrypt(record)} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[11px] font-bold cursor-pointer">View / Decrypt</button>
+                        {isUploader && (
+                          <>
+                            <button onClick={() => { setGrantMode('grant'); setGrantRecord(record) }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-bold cursor-pointer">Grant</button>
+                            <button onClick={() => { setGrantMode('revoke'); setGrantRecord(record) }} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-[11px] font-bold cursor-pointer">Revoke</button>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <span className="px-3 py-1.5 bg-slate-100 dark:bg-slate-950 text-slate-400 dark:text-slate-500 rounded-xl text-[10px] font-bold border border-slate-200 dark:border-slate-800">Legacy Record</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 2: Identity grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Patient</div>
+                    <div className="mt-1 font-mono text-slate-700 dark:text-slate-300 truncate">{record.patientName || record.patientId || record.ownerId || 'N/A'}</div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Uploaded By</div>
+                    <div className="mt-1 font-mono text-slate-700 dark:text-slate-300 truncate">{record.uploadedBy || 'N/A'}{record.uploaderRole ? <span className="text-slate-400 ml-1">({record.uploaderRole})</span> : null}</div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Organization</div>
+                    <div className="mt-1 font-mono text-slate-700 dark:text-slate-300 truncate">{record.organization || record.metadata?.organization || record.patientOrganization || 'N/A'}</div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Record ID</div>
+                    <div className="mt-1 font-mono text-slate-700 dark:text-slate-300 truncate text-[10px]" title={record.id}>{record.id}</div>
+                  </div>
+                </div>
+
+                {/* Row 2b: Role-based access summary */}
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-3 rounded-2xl border border-slate-100 dark:border-slate-850 text-xs">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold flex items-center gap-1.5 mb-2">
+                    <FiShield className="w-3 h-3" />
+                    Role-Based Access
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Doctor', 'Nurse', 'Lab', 'Staff', 'Public'].map((r) => {
+                      const allowed = getRoleAccess(record.sensitivity, r)
+                      return (
+                        <span key={r} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                          allowed
+                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20'
+                            : 'bg-slate-200/50 dark:bg-slate-900/30 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-850'
+                        }`}>
+                          {allowed ? <FiCheck className="w-2.5 h-2.5" /> : <FiX className="w-2.5 h-2.5" />}
+                          {r}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Row 3: Access lists */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Authorized Users {authUsers.length > 0 && <span className="text-emerald-600 dark:text-emerald-400">({authUsers.length})</span>}</div>
+                    <div className="mt-1 flex flex-wrap gap-1" title={authUsers.join(', ')}>
+                      {authUsers.length > 0
+                        ? authUsers.map((u, i) => (
+                            <span key={i} className="inline-block px-1.5 py-0.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-md text-[10px] font-mono font-medium" title={u}>{u}</span>
+                          ))
+                        : <span className="text-slate-400 italic">None</span>}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-950/60 rounded-2xl p-3 border border-slate-100 dark:border-slate-850">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-450 dark:text-slate-500 font-bold">Revoked Users {revUsers.length > 0 && <span className="text-rose-600 dark:text-rose-400">({revUsers.length})</span>}</div>
+                    <div className="mt-1 flex flex-wrap gap-1" title={revUsers.join(', ')}>
+                      {revUsers.length > 0
+                        ? revUsers.map((u, i) => (
+                            <span key={i} className="inline-block px-1.5 py-0.5 bg-rose-500/10 text-rose-700 dark:text-rose-300 rounded-md text-[10px] font-mono font-medium" title={u}>{u}</span>
+                          ))
+                        : <span className="text-slate-400 italic">None</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Decryption View Terminal */}
+        <div className="bg-slate-955 text-slate-200 p-6 rounded-3xl border border-slate-900 min-h-[280px] font-mono text-xs">
+          <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-4 text-[10px] text-slate-400">
+            <span>SECURE CRYPTO DECIPHER MODULE</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </div>
 
-          {/* Decryption View Terminal */}
-          <div className="bg-slate-955 text-slate-200 p-6 rounded-3xl border border-slate-900 flex flex-col justify-between min-h-[300px] font-mono text-xs">
-            <div>
-              <div className="flex items-center justify-between border-b border-slate-900 pb-3 mb-4 text-[10px] text-slate-400">
-                <span>SECURE CRYPTO DECIPHER MODULE</span>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          {selectedRecordToDecrypt ? (
+            <div className="space-y-4">
+              <div>
+                <span className="text-purple-400">Target File:</span> {selectedRecordToDecrypt.fileName || selectedRecordToDecrypt.name || selectedRecordToDecrypt.id}
+              </div>
+              <div>
+                <span className="text-purple-400">Ledger ID:</span> {selectedRecordToDecrypt.id}
               </div>
 
-              {selectedRecordToDecrypt ? (
-                <div className="space-y-4">
-                  <div>
-                    <span className="text-purple-400">Target File:</span> {selectedRecordToDecrypt.file || selectedRecordToDecrypt.fileName || selectedRecordToDecrypt.name}
-                  </div>
-                  <div>
-                    <span className="text-purple-400">Ledger ID:</span> {selectedRecordToDecrypt.id}
-                  </div>
-
-                  {isDecrypting ? (
-                    <div className="flex items-center space-x-2 py-4">
-                      <FiCpu className="animate-spin text-purple-500 w-5 h-5" />
-                      <span className="text-slate-400">Resolving keys, verifying ABAC permissions and deciphering payload...</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="text-emerald-455 flex items-center gap-1.5 font-bold">
-                        <FiUnlock className="w-4 h-4" />
-                        Permissions validated. Decrypted payload recovered:
-                      </div>
-                      {decryptedFile ? (
-                        <div className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl space-y-3 text-slate-300">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="font-bold text-slate-100">{decryptedFile.name}</div>
-                              <div className="text-[10px] text-slate-500">{decryptedFile.type} • {(decryptedFile.size / 1024).toFixed(1)} KB</div>
-                            </div>
-                            <FiFileText className="w-5 h-5 text-purple-400 flex-shrink-0" />
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <a
-                              href={decryptedFile.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-bold"
-                            >
-                              <FiExternalLink className="w-3.5 h-3.5" />
-                              Open File
-                            </a>
-                            <a
-                              href={decryptedFile.url}
-                              download={decryptedFile.name}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg text-[11px] font-bold"
-                            >
-                              <FiDownload className="w-3.5 h-3.5" />
-                              Download
-                            </a>
-                          </div>
-                        </div>
-                      ) : (
-                        <pre className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-slate-300">
-                          {decryptedContent}
-                        </pre>
-                      )}
-                    </div>
-                  )}
+              {isDecrypting ? (
+                <div className="flex items-center space-x-2 py-4">
+                  <FiCpu className="animate-spin text-purple-500 w-5 h-5" />
+                  <span className="text-slate-400">Resolving keys, verifying ABAC permissions and deciphering payload...</span>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-500 space-y-2">
-                  <FiKey className="w-8 h-8 text-slate-600" />
-                      <span>Select an authorized ledger file to initiate Fabric-gated BGW decryption.</span>
+                <div className="space-y-2">
+                  <div className="text-emerald-455 flex items-center gap-1.5 font-bold">
+                    <FiUnlock className="w-4 h-4" />
+                    Permissions validated. Decrypted payload recovered:
+                  </div>
+                  {decryptedFile ? (
+                    <div className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl space-y-3 text-slate-300">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-slate-100">{decryptedFile.name}</div>
+                          <div className="text-[10px] text-slate-500">{decryptedFile.type} &bull; {(decryptedFile.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                        <FiFileText className="w-5 h-5 text-purple-400 flex-shrink-0" />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <a
+                          href={decryptedFile.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-[11px] font-bold"
+                        >
+                          <FiExternalLink className="w-3.5 h-3.5" />
+                          Open File
+                        </a>
+                        <a
+                          href={decryptedFile.url}
+                          download={decryptedFile.name}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-lg text-[11px] font-bold"
+                        >
+                          <FiDownload className="w-3.5 h-3.5" />
+                          Download
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <pre className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-slate-300">
+                      {decryptedContent}
+                    </pre>
+                  )}
                 </div>
               )}
             </div>
-            {selectedRecordToDecrypt && !isDecrypting && (
-              <div className="text-[10px] text-slate-550 border-t border-slate-900 pt-3 mt-4">
-                * Fabric authorized the request, IPFS hash was verified, and BGW recovered the payload key.
-              </div>
-            )}
-          </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-500 space-y-2">
+              <FiKey className="w-8 h-8 text-slate-600" />
+              <span>Select a record to initiate Fabric-gated BGW decryption.</span>
+            </div>
+          )}
         </div>
+        {selectedRecordToDecrypt && !isDecrypting && (
+          <div className="text-[10px] text-slate-550 border-t border-slate-900 pt-3 mt-4">
+            * Fabric authorized the request, IPFS hash was verified, and BGW recovered the payload key.
+          </div>
+        )}
       </div>
     )
   }
 
-  // 5. DOCTOR PERSONAL LOGS
+  // 5. CLINICAL STAFF ACCESS LOGS
   const renderDoctorLogs = () => (
     <div className="space-y-8">
       <div>
@@ -797,135 +1181,7 @@ export default function Dashboard() {
     </div>
   )
 
-  // 6. NURSE ACCESS LAB REPORTS
-  const renderNurseLabReports = () => {
-    const nurseRecords = patientRecords.map(record => ({
-      id: record.id,
-      patient: record.patientName || record.patientId || 'Registered patient',
-      file: record.fileName || record.name,
-      sensitivity: record.sensitivity,
-      allowed: record.authorizedUsers?.length ? record.authorizedUsers.includes(currentKeys.userId) : getRoleAccess(record.sensitivity, 'Nurse')
-    }))
-
-    return (
-      <div className="space-y-8">
-        <div>
-          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">General Ward Lab Reports</h2>
-          <p className="text-slate-500 dark:text-slate-405 text-xs mt-1">Select and review lab records authorized under your attribute clearances.</p>
-        </div>
-
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
-                  <th className="pb-3.5 pl-2">Record File</th>
-                  <th className="pb-3.5">Patient</th>
-                  <th className="pb-3.5">Sensitivity Level</th>
-                  <th className="pb-3.5">Clearance Status</th>
-                  <th className="pb-3.5 text-right pr-2">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-350 text-xs">
-                {nurseRecords.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="py-6 text-center text-slate-450 dark:text-slate-500">
-                      No uploaded lab or patient records are available yet.
-                    </td>
-                  </tr>
-                )}
-                {nurseRecords.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
-                    <td className="py-4 pl-2 font-semibold text-slate-900 dark:text-white">{item.file}</td>
-                    <td className="py-4">{item.patient}</td>
-                    <td className="py-4">
-                      <span className="px-2 py-0.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl text-[10px] font-bold font-mono">
-                        {item.sensitivity}
-                      </span>
-                    </td>
-                    <td className="py-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        item.allowed
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 border-emerald-500/20'
-                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
-                      }`}>
-                        {item.allowed ? 'Authorized' : 'Denied'}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right pr-2">
-                      {item.allowed ? (
-                        <button 
-                          onClick={() => toast.success(`Access allowed for ${item.file}. Use the decrypt workflow for encrypted payload retrieval.`)}
-                          className="px-2.5 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[11px] font-bold cursor-pointer"
-                        >
-                          View Report
-                        </button>
-                      ) : (
-                        <span className="text-slate-400 text-xs font-semibold">No Clearance</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // 7. NURSE ACCESS HISTORY
-  const renderNurseAccessHistory = () => (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">Query History</h2>
-        <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Audit log of your general ward ledger access executions.</p>
-      </div>
-
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 dark:text-slate-500 text-[10px] uppercase tracking-wider font-semibold">
-                <th className="pb-3.5 pl-2">Action</th>
-                <th className="pb-3.5">Result</th>
-                <th className="pb-3.5">Target File</th>
-                <th className="pb-3.5 text-right pr-2">Date & Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 text-slate-700 dark:text-slate-355 text-xs">
-              {currentUserLogs.length === 0 && (
-                <tr>
-                  <td colSpan="4" className="py-6 text-center text-slate-450 dark:text-slate-500">
-                    No nurse access history has been committed for this identity yet.
-                  </td>
-                </tr>
-              )}
-              {currentUserLogs.map(log => {
-                const status = normalizeLogStatus(log.action)
-                return (
-                  <tr key={`${log.requesterId}-${log.dataId}-${log.time}-nurse`} className="hover:bg-slate-50/50 dark:hover:bg-slate-950/20 transition-colors">
-                    <td className="py-4 pl-2 font-mono text-[10px]">{log.action}</td>
-                    <td className="py-4">
-                      <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full ${
-                        status === 'Granted'
-                          ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20'
-                          : 'text-rose-500 bg-rose-500/10 border-rose-500/20'
-                      }`}>{status}</span>
-                    </td>
-                    <td className="py-4 font-semibold">{log.dataId}</td>
-                    <td className="py-4 text-right pr-2 font-mono text-[10px] text-slate-550">{formatDateTime(log.time)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  )
-
-  // 8. ADMIN USER MANAGEMENT
+  // 6. ADMIN USER MANAGEMENT
   const renderAdminUsers = () => {
     const localUsers = readJson('registered_users', [])
     const localUserIds = new Set(localUsers.map(item => item.userId))
@@ -1339,22 +1595,16 @@ export default function Dashboard() {
   const renderSection = () => {
     switch (hash) {
       case '#my-records':
-        if (role === 'Patient') return renderPatientRecords()
+        if (role === 'Patient') return renderClinicalRecords()
         return renderDefault()
       case '#who-accessed':
         if (role === 'Patient') return renderPatientWhoAccessed()
         return renderDefault()
       case '#records':
-        if (role === 'Doctor') return renderDoctorRecords()
+        if (role !== 'Patient') return renderClinicalRecords()
         return renderDefault()
       case '#logs':
-        if (role === 'Doctor') return renderDoctorLogs()
-        return renderDefault()
-      case '#lab-reports':
-        if (role === 'Nurse') return renderNurseLabReports()
-        return renderDefault()
-      case '#access-history':
-        if (role === 'Nurse') return renderNurseAccessHistory()
+        if (role !== 'Patient' && role !== 'Admin') return renderDoctorLogs()
         return renderDefault()
       case '#users':
         if (role === 'Admin') return renderAdminUsers()
@@ -1371,10 +1621,222 @@ export default function Dashboard() {
     }
   }
 
+  // --- DECRYPT RESULT MODAL ---
+  const renderDecryptModal = () => {
+    if (!selectedRecordToDecrypt) return null
+    if (isDecrypting) return null
+
+    const isError = decryptedContent?.startsWith('[ERROR]') || (!decryptedContent && !decryptedFile)
+    if (isError && !decryptedContent) return null
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl w-[560px] max-h-[80vh] flex flex-col space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold">
+              {isError ? 'Access Denied' : 'Decrypted Record'}
+            </h3>
+            <span className="text-[10px] font-mono text-slate-400">
+              {selectedRecordToDecrypt?.id}
+            </span>
+          </div>
+
+          {isError ? (
+            <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <FiLock className="text-rose-500 w-5 h-5 flex-shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-sm font-bold text-rose-600 dark:text-rose-400">Access Denied</span>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {decryptedContent?.replace('[ERROR] Decryption process terminated.\nReason: ', '') || 'You do not have permission to decrypt this record.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : decryptedFile ? (
+            <div className="space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-slate-800 dark:text-slate-200">{decryptedFile.name}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5">{decryptedFile.type} &bull; {(decryptedFile.size / 1024).toFixed(1)} KB</div>
+                  </div>
+                  <FiFileText className="w-5 h-5 text-purple-400" />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <a
+                  href={decryptedFile.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold"
+                >
+                  <FiExternalLink className="w-3.5 h-3.5" />
+                  Open File
+                </a>
+                <a
+                  href={decryptedFile.url}
+                  download={decryptedFile.name}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-100 rounded-xl text-xs font-bold"
+                >
+                  <FiDownload className="w-3.5 h-3.5" />
+                  Download
+                </a>
+              </div>
+            </div>
+          ) : (
+            <pre className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-4 text-xs leading-relaxed whitespace-pre-wrap font-mono text-slate-700 dark:text-slate-300 max-h-[400px] overflow-y-auto">
+              {decryptedContent}
+            </pre>
+          )}
+
+          <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-800">
+            <button
+              onClick={() => {
+                setSelectedRecordToDecrypt(null)
+                setDecryptedContent('')
+                setDecryptedFile((previous) => {
+                  if (previous?.url) URL.revokeObjectURL(previous.url)
+                  return null
+                })
+              }}
+              className="px-4 py-2 border rounded-lg text-xs font-bold cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // --- GRANT / REVOKE MODAL ---
+  const renderGrantRevokeModal = () => {
+    const isGrant = grantMode === 'grant'
+    const recordSensitivity = grantRecord?.sensitivity || grantRecord?.rawRecord?.requiredLevel || ''
+    const recordRevoked = (grantRecord?.revokedUsers || grantRecord?.rawRecord?.revokedUsers || [])
+    const recordAuthorized = (grantRecord?.authorizedUsers || grantRecord?.rawRecord?.authorizedUsers || [])
+    const recordGranted = (grantRecord?.grantedUsers || grantRecord?.rawRecord?.grantedUsers || [])
+    const recordOrganization = grantRecord?.organization || grantRecord?.rawRecord?.metadata?.organization || ''
+
+    const hasAccess = (u) => {
+      const uOrg = u.organization || ''
+      const sameOrg = uOrg && recordOrganization && uOrg.toLowerCase() === recordOrganization.toLowerCase()
+      const byRole = sameOrg && roleCanAccessLevel(u.role, recordSensitivity) && !recordRevoked.includes(u.userId)
+      const byExplicit = recordAuthorized.includes(u.userId) || recordGranted.includes(u.userId)
+      return byRole || byExplicit
+    }
+
+    const isEligibleRole = (u) => u.role && u.role !== 'Patient'
+
+    const selectedUsers = isGrant
+      ? registeredUsers.filter(u =>
+          u.userId !== currentUserId &&
+          isEligibleRole(u) &&
+          !hasAccess(u)
+        )
+      : registeredUsers
+          .filter(u =>
+            u.userId !== currentUserId &&
+            isEligibleRole(u) &&
+            !isUserRecordOwner(grantRecord, u.userId) &&
+            !isUserRecordSubject(grantRecord, u.userId) &&
+            hasAccess(u)
+          )
+
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl w-[480px] max-h-[80vh] flex flex-col space-y-4">
+          <h3 className="text-lg font-bold">
+            {isGrant ? 'Grant Access' : 'Revoke Access'}
+          </h3>
+          <p className="text-xs text-slate-500">
+            {isGrant
+              ? 'Select a user to grant access to this record:'
+              : 'Select a currently authorized user to revoke access:'}
+          </p>
+
+          {grantRecord && (
+            <div className="text-[10px] text-slate-400 font-mono">
+              Record: {grantRecord.id} | Sensitivity: {grantRecord.sensitivity || grantRecord.rawRecord?.sensitivity}
+            </div>
+          )}
+
+          {/* User list */}
+          <div className="flex-1 overflow-y-auto space-y-1 border rounded-xl p-2 max-h-[300px]">
+            {selectedUsers.length === 0 && (
+              <div className="text-xs text-slate-400 text-center py-4">
+                {isGrant ? 'No other users available.' : 'No authorized users to revoke.'}
+              </div>
+            )}
+            {selectedUsers.map((u) => {
+              const name = u.name || u.userId
+              const bgwId = u.bgwRecipientId || ''
+              const isSelected = authorizedUser === u.userId
+              const userOrg = u.organization || ''
+              return (
+                <button
+                  key={u.userId}
+                  onClick={() => {
+                    setAuthorizedUser(u.userId)
+                    setRecipientId(String(bgwId))
+                  }}
+                  className={`w-full text-left p-3 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                    isSelected
+                      ? isGrant
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-purple-500/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold">{name}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{u.role || ''}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] text-slate-500 font-mono">ID: {u.userId}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">{userOrg || 'No Hospital'}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <button
+              onClick={() => {
+                setGrantRecord(null)
+                setGrantMode('grant')
+                setRecipientId('')
+                setAuthorizedUser('')
+              }}
+              className="px-4 py-2 border rounded-lg text-xs font-bold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={isGrant ? handleGrantAccess : handleRevokeAccess}
+              disabled={granting || !authorizedUser}
+              className={`px-4 py-2 text-white rounded-lg text-xs font-bold cursor-pointer disabled:opacity-50 ${
+                isGrant ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-rose-600 hover:bg-rose-500'
+              }`}
+            >
+              {granting
+                ? isGrant ? 'Granting...' : 'Revoking...'
+                : isGrant ? 'Confirm Grant' : 'Confirm Revoke'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // --- FINAL ROUTING WRAPPER ---
   return (
     <div className="animate-fadeIn">
       {renderSection()}
+      {selectedRecordToDecrypt && !isDecrypting && (decryptedContent || decryptedFile) && renderDecryptModal()}
+      {grantRecord && renderGrantRevokeModal()}
     </div>
   )
 }

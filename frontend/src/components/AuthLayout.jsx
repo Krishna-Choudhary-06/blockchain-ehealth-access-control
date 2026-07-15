@@ -22,6 +22,25 @@ export default function AuthLayout({ children }) {
     } catch (e) {
       console.error(e)
     }
+    const refreshStats = () => {
+      try {
+        const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+        setStats(prev => ({
+          ...prev,
+          identities: users.length
+        }))
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    window.addEventListener('demo:users-updated', refreshStats)
+    window.addEventListener('storage', refreshStats)
+
+    return () => {
+      window.removeEventListener('demo:users-updated', refreshStats)
+      window.removeEventListener('storage', refreshStats)
+    }
   }, [])
 
   return (

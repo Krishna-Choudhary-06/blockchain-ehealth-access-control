@@ -157,6 +157,20 @@ class UserRegistry extends Contract {
         await iterator.close();
         return JSON.stringify(results);
     }
+
+    async wipeAll(ctx) {
+        const iterator = await ctx.stub.getStateByRange(
+            'USER_', 'USER_~');
+        let res = await iterator.next();
+        let count = 0;
+        while (!res.done) {
+            await ctx.stub.deleteState(res.value.key);
+            count++;
+            res = await iterator.next();
+        }
+        await iterator.close();
+        return JSON.stringify({ deleted: count, namespace: 'USER' });
+    }
 }
 
 module.exports = UserRegistry;

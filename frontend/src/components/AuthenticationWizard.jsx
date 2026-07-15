@@ -11,7 +11,7 @@ import RoleVerification from './RoleVerification'
 import LoginForm from './LoginForm'
 import BlockchainVerification from './BlockchainVerification'
 
-export default function AuthenticationWizard() {
+export default function AuthenticationWizard({ demoPreset = null }) {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -49,7 +49,32 @@ export default function AuthenticationWizard() {
       setStep(4)
       toast.success(`Identity ${identityId} loaded! Enter password to login.`)
     }
+
+    const refreshStats = () => {
+      try {
+        const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+        setStats({ identitiesCount: users.length })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    window.addEventListener('demo:users-updated', refreshStats)
+    window.addEventListener('storage', refreshStats)
+
+    return () => {
+      window.removeEventListener('demo:users-updated', refreshStats)
+      window.removeEventListener('storage', refreshStats)
+    }
   }, [location.state])
+
+  useEffect(() => {
+    if (demoPreset?.userName) {
+      setVerifiedUser(null)
+      setCredentialData(null)
+      setStep(2)
+    }
+  }, [demoPreset?.userName])
 
   const handleIdentityFound = (user) => {
     setVerifiedUser(user)
@@ -180,7 +205,12 @@ export default function AuthenticationWizard() {
             variants={variants}
             transition={{ duration: 0.3 }}
           >
-            <IdentityLookup onIdentityFound={handleIdentityFound} />
+            <IdentityLookup
+              onIdentityFound={handleIdentityFound}
+              initialLookupMethod={demoPreset?.lookupMethod || 'certificateId'}
+              initialSearchValue={demoPreset?.userName || ''}
+              autoSearch={Boolean(demoPreset?.autoSearch)}
+            />
           </motion.div>
         )}
 
@@ -197,7 +227,8 @@ export default function AuthenticationWizard() {
             <RoleVerification 
               verifiedUser={verifiedUser} 
               onProceed={handleRoleProceed} 
-              onPatientBypass={handlePatientBypass} 
+              onPatientBypass={handlePatientBypass}
+              autoProceed={Boolean(demoPreset?.autoSearch)}
             />
           </motion.div>
         )}
@@ -214,7 +245,8 @@ export default function AuthenticationWizard() {
           >
             <LoginForm 
               verifiedUser={verifiedUser} 
-              onSubmit={handleCredentialsSubmitted} 
+              onSubmit={handleCredentialsSubmitted}
+              initialPassword={demoPreset?.password || ''}
             />
           </motion.div>
         )}
