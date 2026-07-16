@@ -16,6 +16,7 @@ export default function Upload() {
   const { user } = useAuth()
   const [patientName, setPatientName] = useState('')
   const [sensitivityLevel, setSensitivityLevel] = useState('L0')
+  const [recordCategory, setRecordCategory] = useState('MRI')
   const [file, setFile] = useState(null)
   const [fileError, setFileError] = useState('')
   const [previewUrl, setPreviewUrl] = useState(null)
@@ -272,6 +273,7 @@ export default function Upload() {
       const ledgerRecord = {
         id: reportId || 'PAT-' + Math.floor(1000 + Math.random() * 9000),
         name: `${reportId || 'PAT-' + Math.floor(1000 + Math.random() * 9000)}: ${file.name}`,
+        category: recordCategory,
         sensitivity: sensitivityLevel,
         ipfsHash: cid,
         uploadTime: new Date().toLocaleString(),
@@ -285,6 +287,17 @@ export default function Upload() {
         certificateId: certId,
         txId: mockTxId
       }
+
+      // Add dynamic notification
+      const existingNotifs = JSON.parse(localStorage.getItem('notifications_list') || '[]')
+      const newNotif = {
+        id: 'NOTIF-' + Math.floor(100000 + Math.random() * 900000),
+        text: `New Record Uploaded: File "${ledgerRecord.id}: ${file.name}" (${recordCategory}) committed to ledger by clinician.`,
+        time: 'Just now',
+        unread: true,
+        type: 'upload'
+      }
+      localStorage.setItem('notifications_list', JSON.stringify([newNotif, ...existingNotifs]))
 
       const existingRecords = JSON.parse(localStorage.getItem('patient_records') || '[]')
       localStorage.setItem('patient_records', JSON.stringify([ledgerRecord, ...existingRecords]))
@@ -440,6 +453,29 @@ export default function Upload() {
                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-2xl pl-10 pr-4 py-3.5 text-slate-950 dark:text-white placeholder-slate-400/80 focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm"
                     />
                   </div>
+                </div>
+
+                {/* Record Category dropdown */}
+                <div className="space-y-2 mb-4">
+                  <label htmlFor="category" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
+                    Record Category
+                  </label>
+                  <select
+                    id="category"
+                    value={recordCategory}
+                    onChange={(e) => setRecordCategory(e.target.value)}
+                    className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-2xl px-4 py-3.5 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/80 focus:border-transparent transition-all text-sm cursor-pointer appearance-none bg-no-repeat bg-[right_1.25rem_center] bg-[length:1.25em_1.25em]"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E")`
+                    }}
+                  >
+                    <option value="MRI">MRI</option>
+                    <option value="X-Ray">X-Ray</option>
+                    <option value="ECG">ECG</option>
+                    <option value="Prescription">Prescription</option>
+                    <option value="Blood Report">Blood Report</option>
+                    <option value="Lab Report">Lab Report</option>
+                  </select>
                 </div>
 
                 {/* Sensitivity level dropdown & details */}

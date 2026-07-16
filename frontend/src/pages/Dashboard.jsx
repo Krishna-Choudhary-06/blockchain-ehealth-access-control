@@ -68,6 +68,25 @@ export default function Dashboard() {
   const [logStatusFilter, setLogStatusFilter] = useState('ALL')
   const [logListPage, setLogListPage] = useState(1)
   const [logViewMode, setLogViewMode] = useState('TABLE') // 'TABLE' or 'TIMELINE'
+  const [logScope, setLogScope] = useState('ALL') // 'ALL' or 'PROVIDER_ONLY'
+
+  // Custom states for Medrec frontend enhancements
+  const [selectedProvider, setSelectedProvider] = useState(null)
+  const [isProviderModalOpen, setIsProviderModalOpen] = useState(false)
+  const [historyFilterType, setHistoryFilterType] = useState('ALL')
+  const [historyFilterProvider, setHistoryFilterProvider] = useState('ALL')
+  const [historySearchQuery, setHistorySearchQuery] = useState('')
+  const [historyStartDate, setHistoryStartDate] = useState('')
+  const [historyEndDate, setHistoryEndDate] = useState('')
+  const [patientRecordsFilterCat, setPatientRecordsFilterCat] = useState('ALL')
+  const [patientRecordsSearch, setPatientRecordsSearch] = useState('')
+  const [patientRecordsSort, setPatientRecordsSort] = useState('DATE_DESC')
+  const [doctorRecordsFilterCat, setDoctorRecordsFilterCat] = useState('ALL')
+  const [doctorRecordsSearch, setDoctorRecordsSearch] = useState('')
+  const [doctorRecordsSort, setDoctorRecordsSort] = useState('DATE_DESC')
+  const [selectedRecordForDetails, setSelectedRecordForDetails] = useState(null)
+  const [isRecordDetailsModalOpen, setIsRecordDetailsModalOpen] = useState(false)
+  const [providerSearchQuery, setProviderSearchQuery] = useState('')
 
   // Settings active tab
   const [activeSettingTab, setActiveSettingTab] = useState('GENERAL')
@@ -163,8 +182,109 @@ export default function Dashboard() {
   // Simulated Patient Records (implementing Section 5)
   const [patientRecords, setPatientRecords] = useState(() => {
     const saved = localStorage.getItem('patient_records')
-    return saved ? JSON.parse(saved) : []
+    if (saved) return JSON.parse(saved)
+    const defaults = [
+      {
+        id: 'PAT-8820',
+        name: 'PAT-8820: ecg_report.pdf',
+        category: 'ECG',
+        sensitivity: 'L0',
+        ipfsHash: 'QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco',
+        uploadTime: '2026-07-10, 11:22:45 AM',
+        aesKeyHex: '3a9a141b7829ac252dbef23f8b0e7a2b',
+        ivHex: '8823f99011def4b5c6d7e8f9a0b1c2d3',
+        patientName: 'Patient Alex Carter',
+        fileName: 'ecg_report.pdf',
+        fileSize: '1.4 MB',
+        encryptionStatus: 'Encrypted (AES-256-CBC)',
+        certificateId: 'CERT-890214',
+        txId: '0x3a9a141b7829ac252dbef23f8b0e7a2b0e9f1a2380d90d81014ac2460d5b78ab',
+        uploadedBy: 'Dr. Sarah Miller',
+        sharedKeys: {
+          'UID-284918': 'EncKeySarah123',
+          'UID-109284': 'EncKeyPatient123'
+        }
+      },
+      {
+        id: 'PAT-3491',
+        name: 'PAT-3491: blood_panel.pdf',
+        category: 'Blood Report',
+        sensitivity: 'L1',
+        ipfsHash: 'QmYwAPz1wSpn2331SH6SSN3T6SSN2134SHN234728',
+        uploadTime: '2026-07-05, 02:15:30 PM',
+        aesKeyHex: '9c1f5c6a88a8f912e234baad9923ffee5532ab',
+        ivHex: '1092aa88f912bc0790e54ff521bc0790',
+        patientName: 'Patient Alex Carter',
+        fileName: 'blood_panel.pdf',
+        fileSize: '450 KB',
+        encryptionStatus: 'Encrypted (AES-256-CBC)',
+        certificateId: 'CERT-102948',
+        txId: '0x8823f99011de9c1f5c6a88a8f912e234baad9923ffee5532ab99f8313219fb00',
+        uploadedBy: 'Dr. James Watson',
+        sharedKeys: {
+          'UID-284918': 'EncKeySarah456',
+          'UID-999999': 'EncKeyAdmin456'
+        }
+      },
+      {
+        id: 'PAT-1092',
+        name: 'PAT-1092: brain_mri.jpg',
+        category: 'MRI',
+        sensitivity: 'L2',
+        ipfsHash: 'QmZ4yT2x6wW8fjn7sF9a0d81014ac2460d5b78ab',
+        uploadTime: '2026-06-28, 09:44:12 AM',
+        aesKeyHex: '5532ab99f831efee5532ab99f8313219fb00aa99',
+        ivHex: 'baad9923ffee45a21bc0790e54ff521bc07905f',
+        patientName: 'Patient Alex Carter',
+        fileName: 'brain_mri.jpg',
+        fileSize: '3.8 MB',
+        encryptionStatus: 'Encrypted (AES-256-CBC)',
+        certificateId: 'CERT-552190',
+        txId: '0x1092aa88f9120790e50fd45a21bc0790e54ff521bc0790e5fd45a21bc0790e5',
+        uploadedBy: 'Dr. Helen Cho',
+        sharedKeys: {
+          'UID-553219': 'EncKeyNurse123'
+        }
+      }
+    ]
+    localStorage.setItem('patient_records', JSON.stringify(defaults))
+    return defaults
   })
+
+  // Patient Associated Healthcare Providers (implementing Section 3)
+  const [providers, setProviders] = useState(() => {
+    const saved = localStorage.getItem('patient_providers')
+    if (saved) return JSON.parse(saved)
+    const defaults = [
+      { id: 'prov-1', name: 'Dr. Sarah Miller', specialty: 'Cardiologist', org: 'NIT JAMSHEDPUR', email: 'sarah.miller@nit.edu', status: 'Authorized', relationshipActive: true, lastVisit: '2026-07-10', visitHistory: 'Routine cardiovascular checkup and ECG reading.', license: 'LIC-9831-SM', experience: '12 Years', biography: 'Dr. Sarah Miller is a senior cardiologist specializing in cardiovascular health, arrhythmia management, and digital health records.', visitLogs: [
+        { date: '2026-07-10', notes: 'Routine cardiovascular checkup. Patient reports mild exercise fatigue. ECG shows normal sinus rhythm.', vitals: 'BP: 120/80 mmHg, HR: 72 bpm', status: 'Completed' },
+        { date: '2026-05-15', notes: 'Follow-up consultation. Vitals normal. Arrhythmia completely resolved.', vitals: 'BP: 122/82 mmHg, HR: 68 bpm', status: 'Completed' }
+      ]},
+      { id: 'prov-2', name: 'Dr. James Watson', specialty: 'General Physician', org: 'General Clinic', email: 'james.watson@hospital.org', status: 'Authorized', relationshipActive: true, lastVisit: '2026-07-05', visitHistory: 'General health screening and blood report check.', license: 'LIC-9831-JW', experience: '8 Years', biography: 'Dr. James Watson specializes in family medicine, preventive care, and health optimization.', visitLogs: [
+        { date: '2026-07-05', notes: 'General wellness check. Blood panel ordered. Advised dietary modifications.', vitals: 'BP: 118/76 mmHg, HR: 64 bpm', status: 'Completed' }
+      ]},
+      { id: 'prov-3', name: 'Dr. Helen Cho', specialty: 'Neurologist', org: 'Neurology Institute', email: 'helen.cho@brain.org', status: 'Pending Consent', relationshipActive: false, lastVisit: '2026-06-28', visitHistory: 'Migraine evaluation; suggested MRI brain scan.', license: 'LIC-9831-HC', experience: '15 Years', biography: 'Dr. Helen Cho is a leading neurologist focusing on headache research, MRI diagnostic analytics, and nerve pathway verification.', visitLogs: [
+        { date: '2026-06-28', notes: 'Initial consult for chronic migraines. Suggested brain MRI scan to rule out organic lesions.', vitals: 'BP: 125/85 mmHg, HR: 80 bpm', status: 'Completed' }
+      ]},
+      { id: 'prov-4', name: 'Nurse Kelly Smith', specialty: 'Surgical Support', org: 'NIT JAMSHEDPUR', email: 'kelly.smith@nit.edu', status: 'Revoked', relationshipActive: false, lastVisit: '2026-05-18', visitHistory: 'Assisted in outpatient vitals check.', license: 'LIC-9831-KS', experience: '6 Years', biography: 'Nurse Kelly Smith has extensive experience in outpatient recovery and post-surgical support.', visitLogs: [
+        { date: '2026-05-18', notes: 'Vitals measurement prior to outpatient discharge. Stable condition.', vitals: 'BP: 120/80 mmHg, HR: 70 bpm', status: 'Completed' }
+      ]}
+    ]
+    localStorage.setItem('patient_providers', JSON.stringify(defaults))
+    return defaults
+  })
+
+  const saveProviders = (updated) => {
+    localStorage.setItem('patient_providers', JSON.stringify(updated))
+    setProviders(updated)
+  }
+
+  // Clinician Directory Registry (registered doctors in network whom patient can add/associate)
+  const clinicianDirectory = [
+    { id: 'prov-5', name: 'Dr. Robert Carter', specialty: 'Cardiologist', org: 'Cardiology Dept', email: 'robert.carter@hospital.org', license: 'LIC-9831-RC', experience: '14 Years', biography: 'Dr. Robert Carter is a specialist in general cardiology, heart failures, and cardiac surgery.' },
+    { id: 'prov-6', name: 'Dr. Emily Vance', specialty: 'Pediatrician', org: 'Children Clinic', email: 'emily.vance@children.org', license: 'LIC-9831-EV', experience: '10 Years', biography: 'Dr. Emily Vance is a pediatrician focusing on child development and preventive immunizations.' },
+    { id: 'prov-7', name: 'Dr. Amit Kumar', specialty: 'Neurologist', org: 'General Clinic', email: 'dr.amit@hospital.org', license: 'LIC-9831-AK', experience: '9 Years', biography: 'Dr. Amit Kumar is a neurologist specializing in neurological disorders and epilepsy management.' }
+  ]
 
 
   // Get active record IDs belonging to the logged-in patient
@@ -1304,53 +1424,172 @@ export default function Dashboard() {
 
   // 2. PATIENT RECORDS & PERMISSION VISIBILITY (implementing Section 5)
   const renderPatientRecords = () => {
-    const displayRecords = patientRecords.filter(rec => {
+    let displayRecords = patientRecords.filter(rec => {
       if (role === 'Patient') {
         return rec.patientName?.toLowerCase() === user?.name?.toLowerCase()
       }
       return true
     })
 
+    // Search query filter
+    if (patientRecordsSearch.trim()) {
+      const q = patientRecordsSearch.toLowerCase()
+      displayRecords = displayRecords.filter(rec => 
+        rec.name.toLowerCase().includes(q) || 
+        rec.id.toLowerCase().includes(q) || 
+        (rec.category && rec.category.toLowerCase().includes(q))
+      )
+    }
+
+    // Category filter
+    if (patientRecordsFilterCat !== 'ALL') {
+      displayRecords = displayRecords.filter(rec => rec.category === patientRecordsFilterCat)
+    }
+
+    // Sorting
+    displayRecords.sort((a, b) => {
+      if (patientRecordsSort === 'DATE_DESC') {
+        return new Date(b.uploadTime || 0) - new Date(a.uploadTime || 0)
+      }
+      if (patientRecordsSort === 'DATE_ASC') {
+        return new Date(a.uploadTime || 0) - new Date(b.uploadTime || 0)
+      }
+      if (patientRecordsSort === 'SIZE_DESC') {
+        const parseSize = (s) => {
+          if (!s) return 0
+          const val = parseFloat(s)
+          if (s.includes('MB')) return val * 1024 * 1024
+          if (s.includes('KB')) return val * 1024
+          return val
+        }
+        return parseSize(b.fileSize) - parseSize(a.fileSize)
+      }
+      if (patientRecordsSort === 'SIZE_ASC') {
+        const parseSize = (s) => {
+          if (!s) return 0
+          const val = parseFloat(s)
+          if (s.includes('MB')) return val * 1024 * 1024
+          if (s.includes('KB')) return val * 1024
+          return val
+        }
+        return parseSize(a.fileSize) - parseSize(b.fileSize)
+      }
+      return 0
+    })
+
     return (
-      <div className="space-y-8">
-        <div>
-          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">My Uploaded Records</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Audit security clearance levels and attribute access grids set on the blockchain ledger.</p>
+      <div className="space-y-8 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">My Uploaded Records</h2>
+            <p className="text-slate-505 dark:text-slate-405 text-xs mt-1">Audit security clearance levels, record classifications, and attribute access grids set on the ledger.</p>
+          </div>
+        </div>
+
+        {/* Search, Filter & Sort Toolbar */}
+        <div className="bg-white/70 dark:bg-slate-905/60 border border-slate-200/80 dark:border-slate-850 p-4 rounded-3xl shadow-sm backdrop-blur-xl flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="relative w-full md:w-72">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search record name, ID or category..."
+              value={patientRecordsSearch}
+              onChange={(e) => setPatientRecordsSearch(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-405 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+            {/* Filter by Category */}
+            <div className="flex items-center gap-1.5 text-xs w-full sm:w-auto">
+              <Filter className="w-3.5 h-3.5 text-slate-450" />
+              <select
+                value={patientRecordsFilterCat}
+                onChange={(e) => setPatientRecordsFilterCat(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
+              >
+                <option value="ALL">All Categories</option>
+                <option value="MRI">MRI</option>
+                <option value="X-Ray">X-Ray</option>
+                <option value="ECG">ECG</option>
+                <option value="Prescription">Prescription</option>
+                <option value="Blood Report">Blood Report</option>
+                <option value="Lab Report">Lab Report</option>
+              </select>
+            </div>
+
+            {/* Sort Dropdown */}
+            <div className="flex items-center gap-1.5 text-xs w-full sm:w-auto">
+              <select
+                value={patientRecordsSort}
+                onChange={(e) => setPatientRecordsSort(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-355 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
+              >
+                <option value="DATE_DESC">Date: Newest First</option>
+                <option value="DATE_ASC">Date: Oldest First</option>
+                <option value="SIZE_DESC">Size: Large to Small</option>
+                <option value="SIZE_ASC">Size: Small to Large</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-6">
           {displayRecords.length === 0 ? (
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-8 rounded-3xl text-center space-y-4">
-              <FiFileText className="w-12 h-12 text-slate-350 dark:text-slate-700 mx-auto" />
+              <FiFileText className="w-12 h-12 text-slate-355 dark:text-slate-700 mx-auto" />
               <h3 className="text-sm font-bold text-slate-900 dark:text-white">No Records Found</h3>
               <p className="text-[11px] text-slate-550 dark:text-slate-400 max-w-xs mx-auto">
-                You haven't uploaded any medical records to the healthcare network yet.
+                No medical records match the active search and filter constraints.
               </p>
               <Link 
                 to="/upload"
                 className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded-xl shadow-md transition-all gap-1.5 cursor-pointer mx-auto"
               >
                 <FiPlus className="w-4 h-4" />
-                Upload Your First Record
+                Upload New Record
               </Link>
             </div>
           ) : (
             displayRecords.map((record) => (
-              <div key={record.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-4">
+              <div 
+                key={record.id} 
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-4 hover:shadow-md hover:border-purple-500/20 transition-all duration-300 cursor-pointer relative group animate-fadeIn"
+                onClick={() => {
+                  setSelectedRecordForDetails(record)
+                  setIsRecordDetailsModalOpen(true)
+                }}
+              >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <h4 className="text-base font-bold text-slate-900 dark:text-white">{record.name}</h4>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">{record.name}</h4>
+                      <span className="text-[9px] uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold px-2 py-0.5 rounded font-mono border border-purple-500/5">
+                        {record.category || 'General'}
+                      </span>
+                    </div>
                     <div className="flex items-center space-x-2 mt-1">
                       <span className="text-[10px] font-mono text-slate-405 dark:text-slate-500 truncate max-w-[200px] md:max-w-md block" title={record.ipfsHash}>
-                        IPFS: {record.ipfsHash}
+                        IPFS CID: {record.ipfsHash}
                       </span>
-                      <button onClick={() => handleCopy(record.ipfsHash)} className="text-purple-600 hover:text-purple-500 p-0.5 rounded cursor-pointer">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCopy(record.ipfsHash)
+                        }} 
+                        className="text-purple-605 hover:text-purple-500 p-0.5 rounded cursor-pointer"
+                      >
                         <FiCopy className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-[10px] font-mono text-slate-400 dark:text-slate-550 block">Uploaded: {record.uploadTime}</span>
+                  <div className="flex items-center space-x-3 text-right">
+                    <div className="text-right">
+                      <span className="text-[10px] font-mono text-slate-400 dark:text-slate-550 block">Uploaded: {record.uploadTime.split(',')[0]}</span>
+                      <span className="text-[9.5px] text-slate-455 dark:text-slate-500 font-mono block">Size: {record.fileSize || 'N/A'}</span>
+                    </div>
                     <span className="inline-flex items-center px-3 py-1 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
                       Level {record.sensitivity}
                     </span>
@@ -1358,7 +1597,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Access Matrix (Section 5 Requirement) */}
-                <div className="bg-slate-50 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-850/80">
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-100 dark:border-slate-850/80" onClick={(e) => e.stopPropagation()}>
                   <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Current Access Clearance Control Matrix</h5>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {['Doctor', 'Nurse', 'Lab', 'Staff', 'Public'].map((r) => {
@@ -1459,10 +1698,610 @@ export default function Dashboard() {
     )
   }
 
+  // 3b. PATIENT PROVIDERS MANAGEMENT (implementing Phase 3)
+  const renderPatientProviders = () => {
+    const handleToggleProviderStatus = (provId, newStatus) => {
+      const updated = providers.map(p => {
+        if (p.id === provId) {
+          // Log audit entry in notifications
+          const existingNotifs = JSON.parse(localStorage.getItem('notifications_list') || '[]')
+          const prov = providers.find(item => item.id === provId)
+          const newNotif = {
+            id: 'NOTIF-' + Math.floor(100000 + Math.random() * 900000),
+            text: `Permission Changed: Consent status for "${prov ? prov.name : 'Clinician'}" set to ${newStatus}.`,
+            time: 'Just now',
+            unread: true,
+            type: 'consent'
+          }
+          localStorage.setItem('notifications_list', JSON.stringify([newNotif, ...existingNotifs]))
+
+          return { ...p, status: newStatus }
+        }
+        return p
+      })
+      saveProviders(updated)
+      toast.success(`Consent relationship status updated to ${newStatus}`)
+    }
+
+    const handleToggleActiveRelationship = (provId, currentActive) => {
+      const updated = providers.map(p => {
+        if (p.id === provId) {
+          const newActive = !currentActive
+          // Log audit entry in notifications
+          const existingNotifs = JSON.parse(localStorage.getItem('notifications_list') || '[]')
+          const prov = providers.find(item => item.id === provId)
+          const newNotif = {
+            id: 'NOTIF-' + Math.floor(100000 + Math.random() * 900000),
+            text: `Relationship Updated: Connection status for "${prov ? prov.name : 'Clinician'}" set to ${newActive ? 'Active' : 'Inactive'}.`,
+            time: 'Just now',
+            unread: true,
+            type: 'relationship'
+          }
+          localStorage.setItem('notifications_list', JSON.stringify([newNotif, ...existingNotifs]))
+          return { ...p, relationshipActive: newActive }
+        }
+        return p
+      })
+      saveProviders(updated)
+      toast.success(`Provider connection set to ${!currentActive ? 'Active' : 'Inactive'}`)
+      // If modal is open, update selected provider state too
+      if (selectedProvider && selectedProvider.id === provId) {
+        setSelectedProvider(prev => ({ ...prev, relationshipActive: !currentActive }))
+      }
+    }
+
+    const handleAddProvider = (clinician) => {
+      // Check if already associated
+      if (providers.some(p => p.id === clinician.id)) {
+        toast.error(`${clinician.name} is already associated with your profile.`)
+        return
+      }
+      const newProvider = {
+        ...clinician,
+        status: 'Pending Consent',
+        relationshipActive: false,
+        lastVisit: 'Never Visited',
+        visitHistory: 'No visits logged yet.',
+        visitLogs: []
+      }
+      const updated = [...providers, newProvider]
+      saveProviders(updated)
+      
+      // Log notification
+      const existingNotifs = JSON.parse(localStorage.getItem('notifications_list') || '[]')
+      const newNotif = {
+        id: 'NOTIF-' + Math.floor(100000 + Math.random() * 900000),
+        text: `New Association: Requested association with "${clinician.name}" as provider.`,
+        time: 'Just now',
+        unread: true,
+        type: 'association'
+      }
+      localStorage.setItem('notifications_list', JSON.stringify([newNotif, ...existingNotifs]))
+
+      toast.success(`Associated ${clinician.name}. Consent status set to Pending.`)
+    }
+
+    // Filter clinician directory by search query
+    const filteredDirectory = clinicianDirectory.filter(c => 
+      c.name.toLowerCase().includes(providerSearchQuery.toLowerCase()) ||
+      c.specialty.toLowerCase().includes(providerSearchQuery.toLowerCase()) ||
+      c.org.toLowerCase().includes(providerSearchQuery.toLowerCase())
+    )
+
+    return (
+      <div className="space-y-8 animate-fade-in font-sans">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">My Associated Healthcare Providers</h2>
+            <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Manage relationship credentials, active consents, and audit provider access trails.</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Associated Providers list */}
+          <div className="lg:col-span-2 space-y-6">
+            <h3 className="text-base font-bold text-slate-905 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">Active Care Team</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {providers.map((prov) => (
+                <div key={prov.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-4 hover:shadow-md transition-all duration-300 relative group animate-fadeIn">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-purple-500/10 text-purple-650 dark:text-purple-400 flex items-center justify-center font-bold text-sm">
+                        {prov.name.substring(4, 5) || prov.name.substring(0, 1)}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">{prov.name}</h3>
+                        <span className="text-[10px] text-purple-600 dark:text-purple-405 font-semibold bg-purple-500/5 px-2.5 py-0.5 rounded-md mt-0.5 inline-block">
+                          {prov.specialty}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+                        prov.status === 'Authorized' 
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-455 border-emerald-500/20' 
+                          : prov.status === 'Pending Consent'
+                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-455 border-amber-500/20 animate-pulse'
+                          : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
+                      }`}>
+                        {prov.status}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                        prov.relationshipActive 
+                          ? 'bg-purple-100 text-purple-750 dark:bg-purple-955/40 dark:text-purple-400' 
+                          : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${prov.relationshipActive ? 'bg-purple-500 animate-ping' : 'bg-slate-400'}`}></span>
+                        {prov.relationshipActive ? 'Active Conn' : 'Inactive'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-105 dark:border-slate-800/60 pt-4 space-y-3 text-xs text-slate-650 dark:text-slate-350">
+                    <div className="flex justify-between">
+                      <span>Clinic Affiliation</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">{prov.org}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>License ID</span>
+                      <span className="font-mono text-slate-600 dark:text-slate-400">{prov.license || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Last Clinical Visit</span>
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">{prov.lastVisit}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 justify-between items-center pt-2 border-t border-slate-100 dark:border-slate-800/60 text-xs">
+                    <button
+                      onClick={() => {
+                        setSelectedProvider(prov)
+                        setIsProviderModalOpen(true)
+                      }}
+                      className="px-3 py-1.5 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-355 font-bold transition-all cursor-pointer text-xs"
+                    >
+                      Inspect Profile
+                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={prov.status}
+                        onChange={(e) => handleToggleProviderStatus(prov.id, e.target.value)}
+                        className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-slate-705 dark:text-slate-300 focus:outline-none cursor-pointer"
+                      >
+                        <option value="Authorized">Authorize</option>
+                        <option value="Pending Consent">Set Pending</option>
+                        <option value="Revoked">Revoke</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Clinician Search Directory panel */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-6 rounded-3xl shadow-sm space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">Clinician Directory</h3>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Associate and add verified physicians onto your provider consent panel.</p>
+            </div>
+            
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-405">
+                <Search className="w-3.5 h-3.5" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search specialty, name, org..."
+                value={providerSearchQuery}
+                onChange={(e) => setProviderSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+            </div>
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800/40 space-y-3 max-h-[350px] overflow-y-auto pr-1">
+              {filteredDirectory.length === 0 ? (
+                <div className="text-center py-8 text-slate-400 text-xs">No doctors found in directory.</div>
+              ) : (
+                filteredDirectory.map(c => {
+                  const isAssociated = providers.some(p => p.id === c.id)
+                  return (
+                    <div key={c.id} className="pt-3 flex flex-col gap-1.5 first:pt-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-805 dark:text-slate-200">{c.name}</h4>
+                          <span className="text-[10px] text-purple-655 dark:text-purple-400 font-semibold block">{c.specialty} • {c.org}</span>
+                        </div>
+                        <button
+                          onClick={() => handleAddProvider(c)}
+                          disabled={isAssociated}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                            isAssociated
+                              ? 'bg-slate-100 text-slate-400 dark:bg-slate-800 dark:text-slate-600 cursor-not-allowed'
+                              : 'bg-purple-605 hover:bg-purple-500 text-white shadow-sm'
+                          }`}
+                        >
+                          {isAssociated ? 'Connected' : 'Associate'}
+                        </button>
+                      </div>
+                      <p className="text-[9.5px] text-slate-400 leading-relaxed italic">{c.biography}</p>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Provider Profile & Timeline/Visit History Modal */}
+        {isProviderModalOpen && selectedProvider && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-955/80 backdrop-blur-md animate-fadeIn">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 max-w-3xl w-full shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto animate-zoom-in text-slate-805 dark:text-slate-105">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-650 dark:text-purple-400 flex items-center justify-center font-bold text-sm">
+                    {selectedProvider.name.substring(4, 5) || selectedProvider.name.substring(0, 1)}
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-955 dark:text-white">{selectedProvider.name}</h3>
+                    <p className="text-[10px] text-slate-405 font-mono">Specialty: {selectedProvider.specialty} • Affiliation: {selectedProvider.org}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    setIsProviderModalOpen(false)
+                    setSelectedProvider(null)
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-slate-105 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                {/* Profile Card details */}
+                <div className="space-y-4 bg-slate-50 dark:bg-slate-950/40 p-5 rounded-2xl border border-slate-105 dark:border-slate-850">
+                  <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-slate-800 pb-2">
+                    <h4 className="font-bold text-slate-805 dark:text-slate-200">Clinician Profile</h4>
+                    <button
+                      onClick={() => handleToggleActiveRelationship(selectedProvider.id, selectedProvider.relationshipActive)}
+                      className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                        selectedProvider.relationshipActive
+                          ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20'
+                          : 'bg-rose-500/10 text-rose-600 border border-rose-500/20'
+                      }`}
+                    >
+                      Status: {selectedProvider.relationshipActive ? 'Active Connection' : 'Inactive Connection'}
+                    </button>
+                  </div>
+                  <div className="space-y-2.5">
+                    <div>
+                      <span className="text-slate-450 block font-semibold">Distinguished Name / Peer DN</span>
+                      <span className="font-mono text-[10px] bg-white dark:bg-slate-950 px-2 py-1 rounded border border-slate-100 dark:border-slate-900 block truncate">
+                        CN={selectedProvider.name},OU=Doctor,O={selectedProvider.org}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-slate-450 font-semibold">License Registration</span>
+                        <span className="font-bold block text-slate-800 dark:text-white">{selectedProvider.license || 'LIC-9831-MOCK'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-450 font-semibold">Clinical Experience</span>
+                        <span className="font-bold block text-slate-800 dark:text-white">{selectedProvider.experience || '8 Years'}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-450 font-semibold block">Biography Description</span>
+                      <p className="text-slate-650 dark:text-slate-350 leading-relaxed italic">{selectedProvider.biography || 'No biography details loaded.'}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-455 font-semibold block">Last Visit Notes</span>
+                      <p className="text-slate-650 dark:text-slate-350 leading-relaxed font-mono bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-850 italic">
+                        {selectedProvider.visitHistory}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Visit History timeline logs */}
+                <div className="space-y-4 bg-slate-50 dark:bg-slate-955/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-850">
+                  <h4 className="font-bold text-slate-805 dark:text-slate-200 border-b border-slate-200/50 dark:border-slate-800 pb-2">Provider Timeline / Visit History</h4>
+                  <div className="space-y-4 overflow-y-auto max-h-64 pr-1">
+                    {selectedProvider.visitLogs && selectedProvider.visitLogs.length > 0 ? (
+                      selectedProvider.visitLogs.map((vl, idx) => (
+                        <div key={idx} className="relative pl-4 border-l-2 border-purple-500/30 space-y-1">
+                          <div className="absolute -left-[5.5px] top-1 w-2.5 h-2.5 rounded-full bg-purple-500"></div>
+                          <div className="flex justify-between items-center text-[10.5px]">
+                            <span className="font-bold text-purple-655 dark:text-purple-400">{vl.date}</span>
+                            <span className="text-slate-400 text-[9.5px]">{vl.vitals}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-705 dark:text-slate-300 leading-relaxed italic">{vl.notes}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-10 text-slate-400 text-[11px] space-y-2">
+                        <FiCalendar className="w-8 h-8 mx-auto opacity-30 text-purple-600" />
+                        <span>No patient visit timeline history logs found for this clinician.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Secure record visibility grants mapped to provider specialty */}
+              <div className="bg-slate-50 dark:bg-slate-955/40 p-5 rounded-2xl border border-slate-100 dark:border-slate-850 text-xs">
+                <h4 className="font-bold text-slate-805 dark:text-slate-200 border-b border-slate-200/50 dark:border-slate-800 pb-2 mb-3">Linked Ledger Reports for Clinician Access</h4>
+                <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
+                  {patientRecords
+                    .filter(rec => rec.patientName?.toLowerCase() === user?.name?.toLowerCase())
+                    .map(rec => {
+                      const hasAccess = selectedProvider.status === 'Authorized' && getRoleAccess(rec.sensitivity, 'Doctor')
+                      return (
+                        <div key={rec.id} className="flex justify-between items-center bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-855 p-2.5 rounded-xl">
+                          <div>
+                            <span className="font-bold text-slate-909 dark:text-white block">{rec.name}</span>
+                            <span className="text-[10px] text-slate-405 font-mono">Category: {rec.category || 'General'} | Sensitivity Level {rec.sensitivity}</span>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
+                            hasAccess 
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-455 border-emerald-500/20' 
+                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-455 border-rose-500/20'
+                          }`}>
+                            {hasAccess ? 'Access Authorized' : 'Access Prohibited'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  {patientRecords.filter(rec => rec.patientName?.toLowerCase() === user?.name?.toLowerCase()).length === 0 && (
+                    <div className="text-center py-4 text-slate-400">No medical records uploaded for authorization.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-3 border-t border-slate-105 dark:border-slate-850">
+                <button
+                  onClick={() => {
+                    setIsProviderModalOpen(false)
+                    setSelectedProvider(null)
+                  }}
+                  className="px-5 py-2.5 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-808 dark:text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Close Profile Details
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // 3c. MEDICAL HISTORY TIMELINE (implementing Phase 4)
+  const renderPatientHistory = () => {
+    // Collect historical events:
+    // 1. Files uploaded
+    // 2. Visits logged with providers
+    // 3. Permission grants
+    const events = []
+
+    // 1. Files uploaded
+    patientRecords
+      .filter(rec => rec.patientName?.toLowerCase() === user?.name?.toLowerCase())
+      .forEach(rec => {
+        events.push({
+          id: `upload-${rec.id}`,
+          type: 'UPLOAD',
+          title: `Medical Record Uploaded: ${rec.fileName}`,
+          description: `Uploaded report type ${rec.category} with sensitivity ${rec.sensitivity} and CID ${rec.ipfsHash.substring(0, 15)}...`,
+          date: rec.uploadTime.split(',')[0],
+          rawDate: new Date(rec.uploadTime),
+          category: rec.category,
+          provider: rec.uploadedBy || 'Patient Self',
+          meta: `IPFS CID: ${rec.ipfsHash}`
+        })
+      })
+
+    // 2. Visits logged with providers
+    providers.forEach(p => {
+      if (p.visitLogs) {
+        p.visitLogs.forEach((vl, idx) => {
+          events.push({
+            id: `visit-${p.id}-${idx}`,
+            type: 'VISIT',
+            title: `Clinical Consultation: ${p.name}`,
+            description: `Diagnostics summary: "${vl.notes}"`,
+            date: vl.date,
+            rawDate: new Date(vl.date),
+            category: 'Prescription', // Mocking clinic notes under Prescription type
+            provider: p.name,
+            meta: `Vitals: ${vl.vitals}`
+          })
+        })
+      }
+    })
+
+    // 3. Access logs / Permission updates
+    const savedHistory = JSON.parse(localStorage.getItem('access_history') || '[]')
+    savedHistory.forEach((h, idx) => {
+      events.push({
+        id: `access-${idx}`,
+        type: 'PERMISSION',
+        title: `Permission Updated: ${h.userName}`,
+        description: `Consent status changed or record shared key created for case file ${h.recordId}.`,
+        date: new Date(h.grantedDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }),
+        rawDate: new Date(h.grantedDate),
+        category: h.recordType,
+        provider: h.userName,
+        meta: `Clearance State: Active Granted`
+      })
+    })
+
+    // Filter events by SearchQuery
+    let filteredEvents = events.filter(e => {
+      const q = historySearchQuery.toLowerCase()
+      return e.title.toLowerCase().includes(q) || 
+             e.description.toLowerCase().includes(q) || 
+             e.provider.toLowerCase().includes(q) ||
+             (e.category && e.category.toLowerCase().includes(q))
+    })
+
+    // Filter events by Category
+    if (historyFilterType !== 'ALL') {
+      filteredEvents = filteredEvents.filter(e => e.category?.toLowerCase() === historyFilterType.toLowerCase() || e.type === historyFilterType)
+    }
+
+    // Filter events by Provider
+    if (historyFilterProvider !== 'ALL') {
+      filteredEvents = filteredEvents.filter(e => e.provider.toLowerCase().includes(historyFilterProvider.toLowerCase()) || historyFilterProvider.toLowerCase().includes(e.provider.toLowerCase()))
+    }
+
+    // Filter events by Start Date & End Date calendars
+    if (historyStartDate) {
+      const start = new Date(historyStartDate)
+      filteredEvents = filteredEvents.filter(e => e.rawDate >= start)
+    }
+    if (historyEndDate) {
+      const end = new Date(historyEndDate)
+      end.setHours(23, 59, 59, 999) // include whole end day
+      filteredEvents = filteredEvents.filter(e => e.rawDate <= end)
+    }
+
+    // Sort events chronologically (Newest First)
+    filteredEvents.sort((a, b) => b.rawDate - a.rawDate)
+
+    const categoriesList = ['ECG', 'MRI', 'Blood Report', 'Prescription', 'Lab Report', 'X-Ray']
+
+    return (
+      <div className="space-y-8 animate-fade-in font-sans">
+        <div>
+          <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">Medical History Timeline</h2>
+          <p className="text-slate-550 dark:text-slate-400 text-xs mt-1">Trace all medical updates, diagnoses, uploads, and clinical visits anchored in blockchain ledger.</p>
+        </div>
+
+        {/* Filter Toolbar */}
+        <div className="bg-white/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-5 rounded-3xl shadow-sm backdrop-blur-xl flex flex-col lg:flex-row items-center justify-between gap-4">
+          <div className="relative w-full lg:w-72">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-405">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search history, diagnoses, providers..."
+              value={historySearchQuery}
+              onChange={(e) => setHistorySearchQuery(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+            {/* Filter by Category */}
+            <select
+              value={historyFilterType}
+              onChange={(e) => setHistoryFilterType(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Event Types</option>
+              <option value="UPLOAD">File Uploads</option>
+              <option value="VISIT">Clinic Visits</option>
+              <option value="PERMISSION">Consent Logs</option>
+              {categoriesList.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+
+            {/* Filter by Provider */}
+            <select
+              value={historyFilterProvider}
+              onChange={(e) => setHistoryFilterProvider(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-955 border border-slate-205 border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-350 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All Caregivers</option>
+              {providers.map(prov => <option key={prov.id} value={prov.name}>{prov.name}</option>)}
+            </select>
+
+            {/* Start Date */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400 font-semibold">Start:</span>
+              <input
+                type="date"
+                value={historyStartDate}
+                onChange={(e) => setHistoryStartDate(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+              />
+            </div>
+
+            {/* End Date */}
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-slate-400 font-semibold">End:</span>
+              <input
+                type="date"
+                value={historyEndDate}
+                onChange={(e) => setHistoryEndDate(e.target.value)}
+                className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-2 py-1.5 text-xs text-slate-700 dark:text-slate-300 focus:outline-none cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Visual Timeline Section */}
+        <div className="relative border-l-2 border-purple-500/30 ml-4 md:ml-8 pl-6 md:pl-8 space-y-8">
+          {filteredEvents.length === 0 ? (
+            <div className="bg-white/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl text-center text-slate-450 ml-[-30px]">
+              <FiFileText className="w-10 h-10 mx-auto mb-3 opacity-30 text-purple-650" />
+              <span>No historical events match the current search filters or date range.</span>
+            </div>
+          ) : (
+            filteredEvents.map((event) => (
+              <div key={event.id} className="relative ml-[-30px] md:ml-[-40px] flex items-start gap-4 md:gap-6 group">
+                {/* Timeline Icon Node */}
+                <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center shadow-md bg-white dark:bg-slate-900 z-10 transition-transform group-hover:scale-110 ${
+                  event.type === 'UPLOAD'
+                    ? 'border-emerald-500 text-emerald-500'
+                    : event.type === 'VISIT'
+                    ? 'border-blue-500 text-blue-500'
+                    : 'border-purple-500 text-purple-500'
+                }`}>
+                  {event.type === 'UPLOAD' ? (
+                    <FiArrowUp className="w-3.5 h-3.5" />
+                  ) : event.type === 'VISIT' ? (
+                    <FiActivity className="w-3.5 h-3.5" />
+                  ) : (
+                    <FiCheckCircle className="w-3.5 h-3.5" />
+                  )}
+                </div>
+
+                {/* Event details card */}
+                <div className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-855 p-5 rounded-3xl shadow-sm space-y-2.5 transition-all duration-300 hover:shadow-md hover:border-purple-500/10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                    <h3 className="font-bold text-sm text-slate-905 dark:text-white flex items-center gap-2">
+                      {event.title}
+                      {event.category && (
+                        <span className="text-[9px] uppercase font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                          {event.category}
+                        </span>
+                      )}
+                    </h3>
+                    <span className="text-[10px] font-mono text-purple-650 dark:text-purple-400 font-bold whitespace-nowrap bg-purple-500/5 px-2 py-0.5 rounded">
+                      {event.date}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-350 leading-relaxed font-semibold">{event.description}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800/40 pt-2 text-[10px] text-slate-450 font-semibold font-mono">
+                    <span>Caregiver: {event.provider}</span>
+                    <span className="text-slate-400">{event.meta}</span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    )
+  }
+
   // 4. DOCTOR RECORDS LIST
   const renderDoctorRecords = () => {
     // Map patient records to Doctor's workspace records
-    const doctorPatients = patientRecords.map(rec => {
+    let doctorPatients = patientRecords.map(rec => {
       let authorized = false
       if (rec.sharedKeys) {
         // Real record: check if Doctor's key is present
@@ -1476,44 +2315,152 @@ export default function Dashboard() {
         id: rec.id,
         patient: rec.patientName || 'Unknown Patient',
         file: rec.fileName || rec.name,
+        category: rec.category,
         sensitivity: rec.sensitivity,
         authorized: authorized,
+        uploadTime: rec.uploadTime,
+        fileSize: rec.fileSize,
         rawRecord: rec
       }
     })
 
+    // Search query filter
+    if (doctorRecordsSearch.trim()) {
+      const q = doctorRecordsSearch.toLowerCase()
+      doctorPatients = doctorPatients.filter(rec => 
+        rec.file.toLowerCase().includes(q) || 
+        rec.patient.toLowerCase().includes(q) || 
+        rec.id.toLowerCase().includes(q) || 
+        (rec.category && rec.category.toLowerCase().includes(q))
+      )
+    }
+
+    // Category filter
+    if (doctorRecordsFilterCat !== 'ALL') {
+      doctorPatients = doctorPatients.filter(rec => rec.category === doctorRecordsFilterCat)
+    }
+
+    // Sorting
+    doctorPatients.sort((a, b) => {
+      if (doctorRecordsSort === 'DATE_DESC') {
+        return new Date(b.uploadTime || 0) - new Date(a.uploadTime || 0)
+      }
+      if (doctorRecordsSort === 'DATE_ASC') {
+        return new Date(a.uploadTime || 0) - new Date(b.uploadTime || 0)
+      }
+      if (doctorRecordsSort === 'SIZE_DESC') {
+        const parseSize = (s) => {
+          if (!s) return 0
+          const val = parseFloat(s)
+          if (s.includes('MB')) return val * 1024 * 1024
+          if (s.includes('KB')) return val * 1024
+          return val
+        }
+        return parseSize(b.fileSize) - parseSize(a.fileSize)
+      }
+      if (doctorRecordsSort === 'SIZE_ASC') {
+        const parseSize = (s) => {
+          if (!s) return 0
+          const val = parseFloat(s)
+          if (s.includes('MB')) return val * 1024 * 1024
+          if (s.includes('KB')) return val * 1024
+          return val
+        }
+        return parseSize(a.fileSize) - parseSize(b.fileSize)
+      }
+      return 0
+    })
+
     return (
-      <div className="space-y-8">
+      <div className="space-y-8 animate-fade-in">
         <div>
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">Patient Records Workspace</h2>
           <p className="text-slate-505 dark:text-slate-400 text-xs mt-1">Decrypt and inspect active patient health records authorized by ABAC consensus.</p>
+        </div>
+
+        {/* Search, Filter & Sort Toolbar */}
+        <div className="bg-white/70 dark:bg-slate-905/60 border border-slate-200/80 dark:border-slate-850 p-4 rounded-3xl shadow-sm backdrop-blur-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="relative w-full sm:w-72">
+            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search patient name, case ID or category..."
+              value={doctorRecordsSearch}
+              onChange={(e) => setDoctorRecordsSearch(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850 rounded-xl pl-10 pr-4 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-405 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
+            <select
+              value={doctorRecordsFilterCat}
+              onChange={(e) => setDoctorRecordsFilterCat(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-355 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
+            >
+              <option value="ALL">All Categories</option>
+              <option value="MRI">MRI</option>
+              <option value="X-Ray">X-Ray</option>
+              <option value="ECG">ECG</option>
+              <option value="Prescription">Prescription</option>
+              <option value="Blood Report">Blood Report</option>
+              <option value="Lab Report">Lab Report</option>
+            </select>
+
+            <select
+              value={doctorRecordsSort}
+              onChange={(e) => setDoctorRecordsSort(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-355 focus:outline-none focus:ring-1 focus:ring-purple-500 cursor-pointer"
+            >
+              <option value="DATE_DESC">Date: Newest First</option>
+              <option value="DATE_ASC">Date: Oldest First</option>
+              <option value="SIZE_DESC">Size: Large to Small</option>
+              <option value="SIZE_ASC">Size: Small to Large</option>
+            </select>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-6 rounded-3xl shadow-sm space-y-4">
             <h3 className="text-base font-bold text-slate-900 dark:text-white">Accessible Ledger Files</h3>
             <div className="divide-y divide-slate-100 dark:divide-slate-800/40 space-y-3">
-              {doctorPatients.map((rec) => (
-                <div key={rec.id} className="pt-3 flex items-center justify-between gap-3 first:pt-0">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">{rec.file}</h4>
-                    <span className="text-[10px] text-slate-450 block">Patient: {rec.patient} | Sensitivity: {rec.sensitivity}</span>
+              {doctorPatients.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 text-xs">No ledger files found matching filters.</div>
+              ) : (
+                doctorPatients.map((rec) => (
+                  <div 
+                    key={rec.id} 
+                    className="pt-3 flex items-center justify-between gap-3 first:pt-0 group cursor-pointer animate-fadeIn"
+                    onClick={() => {
+                      setSelectedRecordForDetails(rec.rawRecord)
+                      setIsRecordDetailsModalOpen(true)
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors truncate">{rec.file}</h4>
+                      <span className="text-[10px] text-slate-450 block truncate">
+                        Patient: <span className="font-semibold text-slate-750 dark:text-slate-300">{rec.patient}</span> | Classification: Level {rec.sensitivity} | Category: <span className="font-bold text-purple-650 dark:text-purple-400">{rec.category || 'General'}</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {rec.authorized ? (
+                        <button 
+                          onClick={() => handleDecrypt(rec.rawRecord || rec)}
+                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-purple-600/10 cursor-pointer transition-colors"
+                        >
+                          Decrypt & Read
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
+                          <FiLock className="w-3 h-3" />
+                          Locked
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {rec.authorized ? (
-                    <button 
-                      onClick={() => handleDecrypt(rec.rawRecord || rec)}
-                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-purple-600/10 cursor-pointer"
-                    >
-                      Decrypt & Read
-                    </button>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-500 bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
-                      <FiLock className="w-3 h-3" />
-                      Locked
-                    </span>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -1545,7 +2492,7 @@ export default function Dashboard() {
                         <FiUnlock className="w-4 h-4" />
                         Permissions Validated. Plaintext output:
                       </div>
-                      <pre className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-slate-300">
+                      <pre className="bg-slate-900 border border-slate-900/60 p-4 rounded-xl text-[11px] leading-relaxed whitespace-pre-wrap font-sans text-slate-350 font-normal">
                         {decryptedContent}
                       </pre>
                     </div>
@@ -1997,9 +2944,7 @@ export default function Dashboard() {
         </div>
       </div>
     )
-  }
-
-  // 9. ADMIN SYSTEM ACCESS LOGS
+  }  // 9. ADMIN SYSTEM ACCESS LOGS
   const renderAdminAccessLogs = () => {
     // Search and Status Filtering
     const filteredLogs = accessLogs.filter(log => {
@@ -2009,7 +2954,10 @@ export default function Dashboard() {
       
       const matchStatus = logStatusFilter === 'ALL' || log.status.toUpperCase() === logStatusFilter.toUpperCase()
       
-      return matchSearch && matchStatus
+      const matchScope = logScope === 'ALL' || 
+                         (logScope === 'PROVIDER_ONLY' && (log.role === 'Doctor' || log.role === 'Nurse'))
+      
+      return matchSearch && matchStatus && matchScope
     })
 
     // Pagination (5 items per page)
@@ -2021,7 +2969,7 @@ export default function Dashboard() {
 
     return (
       <div className="space-y-8 animate-fade-in">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
               <Activity className="text-purple-650 dark:text-purple-400 animate-pulse" />
@@ -2030,34 +2978,66 @@ export default function Dashboard() {
             <p className="text-slate-550 dark:text-slate-400 text-xs mt-1">Complete system-wide access logs committed to CouchDB state database.</p>
           </div>
 
-          {/* Table vs Timeline Sliding Toggle */}
-          <div className="bg-slate-100 dark:bg-slate-950 p-1 rounded-2xl border border-slate-200/80 dark:border-slate-850 flex items-center self-start sm:self-center font-sans text-xs">
-            <button
-              onClick={() => {
-                setLogViewMode('TABLE')
-                setLogListPage(1)
-              }}
-              className={`px-4.5 py-2 rounded-xl font-bold transition-all cursor-pointer ${
-                logViewMode === 'TABLE' 
-                  ? 'bg-white dark:bg-slate-900 text-purple-650 dark:text-purple-400 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Table View
-            </button>
-            <button
-              onClick={() => {
-                setLogViewMode('TIMELINE')
-                setLogListPage(1)
-              }}
-              className={`px-4.5 py-2 rounded-xl font-bold transition-all cursor-pointer ${
-                logViewMode === 'TIMELINE' 
-                  ? 'bg-white dark:bg-slate-900 text-purple-650 dark:text-purple-400 shadow-sm' 
-                  : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}
-            >
-              Timeline View
-            </button>
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* System logs vs Provider logs scope toggle (Phase 7) */}
+            <div className="bg-slate-100 dark:bg-slate-950 p-1 rounded-2xl border border-slate-202 dark:border-slate-850 flex items-center font-sans text-xs">
+              <button
+                onClick={() => {
+                  setLogScope('ALL')
+                  setLogListPage(1)
+                }}
+                className={`px-4.5 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+                  logScope === 'ALL' 
+                    ? 'bg-white dark:bg-slate-900 text-purple-655 dark:text-purple-400 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-805 dark:hover:text-slate-200'
+                }`}
+              >
+                All Access Logs
+              </button>
+              <button
+                onClick={() => {
+                  setLogScope('PROVIDER_ONLY')
+                  setLogListPage(1)
+                }}
+                className={`px-4.5 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+                  logScope === 'PROVIDER_ONLY' 
+                    ? 'bg-white dark:bg-slate-900 text-purple-655 dark:text-purple-400 shadow-sm' 
+                    : 'text-slate-505 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Provider Actions
+              </button>
+            </div>
+
+            {/* Table vs Timeline Sliding Toggle */}
+            <div className="bg-slate-100 dark:bg-slate-955 p-1 rounded-2xl border border-slate-205 dark:border-slate-850 flex items-center font-sans text-xs">
+              <button
+                onClick={() => {
+                  setLogViewMode('TABLE')
+                  setLogListPage(1)
+                }}
+                className={`px-4.5 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+                  logViewMode === 'TABLE' 
+                    ? 'bg-white dark:bg-slate-900 text-purple-655 dark:text-purple-400 shadow-sm' 
+                    : 'text-slate-505 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Table View
+              </button>
+              <button
+                onClick={() => {
+                  setLogViewMode('TIMELINE')
+                  setLogListPage(1)
+                }}
+                className={`px-4.5 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+                  logViewMode === 'TIMELINE' 
+                    ? 'bg-white dark:bg-slate-900 text-purple-655 dark:text-purple-400 shadow-sm' 
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Timeline View
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2800,6 +3780,12 @@ export default function Dashboard() {
       case '#my-records':
         if (role === 'Patient') return renderPatientRecords()
         return renderDefault()
+      case '#providers':
+        if (role === 'Patient') return renderPatientProviders()
+        return renderDefault()
+      case '#history':
+        if (role === 'Patient') return renderPatientHistory()
+        return renderDefault()
       case '#who-accessed':
         if (role === 'Patient') return renderPatientWhoAccessed()
         return renderDefault()
@@ -3114,6 +4100,134 @@ export default function Dashboard() {
                     Confirm Action
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Phase 2: Record Details Modal Overlay */}
+      {isRecordDetailsModalOpen && selectedRecordForDetails && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-955/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-800 rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl space-y-6 animate-zoom-in text-slate-805 dark:text-slate-105">
+            {/* Modal header */}
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-650 dark:text-purple-400 flex items-center justify-center">
+                  <FiFileText className="w-5.5 h-5.5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-955 dark:text-white">
+                    Medical Record Details
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-mono">RECORD ID: {selectedRecordForDetails.id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsRecordDetailsModalOpen(false)
+                  setSelectedRecordForDetails(null)
+                }}
+                className="p-1.5 rounded-lg hover:bg-slate-105 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Details Grid */}
+            <div className="space-y-4 text-xs font-semibold text-slate-750 dark:text-slate-350">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-slate-455 block">Record Name / Title</span>
+                  <span className="text-slate-950 dark:text-white font-bold block">{selectedRecordForDetails.fileName || selectedRecordForDetails.name}</span>
+                </div>
+                <div>
+                  <span className="text-slate-455 block">Classification / Category</span>
+                  <span className="text-purple-655 dark:text-purple-400 font-bold block">{selectedRecordForDetails.category || 'General'}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800/60 pt-3">
+                <div>
+                  <span className="text-slate-455 block">File Size</span>
+                  <span className="text-slate-955 dark:text-white font-bold block">{selectedRecordForDetails.fileSize || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-455 block">Upload Timestamp</span>
+                  <span className="text-slate-955 dark:text-white font-mono block">{selectedRecordForDetails.uploadTime}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800/60 pt-3">
+                <div>
+                  <span className="text-slate-455 block">Record Owner (Patient)</span>
+                  <span className="text-slate-955 dark:text-white font-bold block">{selectedRecordForDetails.patientName || 'Unknown Patient'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-455 block">Originator (Healthcare Entity)</span>
+                  <span className="text-slate-955 dark:text-white font-bold block">{selectedRecordForDetails.uploadedBy || 'Patient Uploaded'}</span>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/60 pt-3 space-y-2">
+                <div>
+                  <span className="text-slate-455 block mb-1">IPFS Content Identifier (CID)</span>
+                  <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-100 dark:border-slate-850 font-mono text-[10px] break-all select-all flex justify-between items-center text-slate-600 dark:text-slate-400">
+                    <span>{selectedRecordForDetails.ipfsHash}</span>
+                    <button 
+                      onClick={() => handleCopy(selectedRecordForDetails.ipfsHash)}
+                      className="text-purple-655 hover:text-purple-500 p-1 cursor-pointer"
+                      title="Copy CID"
+                    >
+                      <FiCopy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-slate-455 block mb-1">Blockchain Transaction ID (TxHash)</span>
+                  <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-100 dark:border-slate-850 font-mono text-[10px] break-all select-all flex justify-between items-center text-slate-600 dark:text-slate-400">
+                    <span>{selectedRecordForDetails.txId || '0xbaad9923ffee45a21bc0790e54ff521bc0790e5f'}</span>
+                    <button 
+                      onClick={() => handleCopy(selectedRecordForDetails.txId || '0xbaad9923ffee45a21bc0790e54ff521bc0790e5f')}
+                      className="text-purple-655 hover:text-purple-500 p-1 cursor-pointer"
+                      title="Copy Transaction Hash"
+                    >
+                      <FiCopy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 border-t border-slate-100 dark:border-slate-800/60 pt-3 text-[10px] font-mono">
+                <div>
+                  <span className="text-slate-455 block">Security Clearance Access Level</span>
+                  <span className="inline-flex items-center px-2.5 py-0.5 mt-1 rounded-full font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                    Level {selectedRecordForDetails.sensitivity}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-455 block">Cryptographic Certificate Signature</span>
+                  <span className="text-slate-900 dark:text-white font-bold block">{selectedRecordForDetails.certificateId || 'CERT-N/A'}</span>
+                </div>
+              </div>
+
+              <div className="bg-emerald-500/5 border border-emerald-500/10 p-3 rounded-2xl flex gap-2.5 items-start text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold leading-relaxed font-sans">
+                <FiLock className="w-4 h-4 text-emerald-505 flex-shrink-0 mt-0.5" />
+                <span>HIPAA Compliant Integrity Checked: Encrypted using AES-256 and anchored in the Fabric block header with zero-knowledge verification proof.</span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRecordDetailsModalOpen(false)
+                  setSelectedRecordForDetails(null)
+                }}
+                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-808 dark:text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              >
+                Dismiss Details
               </button>
             </div>
           </div>
