@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import toast from 'react-hot-toast'
-import { FiSun, FiMoon, FiBell, FiLogOut, FiChevronDown, FiUser } from 'react-icons/fi'
+import { FiSun, FiMoon, FiBell, FiLogOut, FiChevronDown, FiUser, FiTrash2, FiCheckCircle, FiCircle } from 'react-icons/fi'
 
 export default function Topbar() {
   const { user, logout } = useAuth()
@@ -12,12 +12,55 @@ export default function Topbar() {
 
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [notifications, setNotifications] = useState([])
 
-  const notifications = [
-    { id: 1, text: 'Consensus reached for block #592', time: '5m ago', unread: true },
-    { id: 2, text: 'Access request authorized for Dr. Sarah', time: '12m ago', unread: true },
-    { id: 3, text: 'Ledger backup completed successfully', time: '1h ago', unread: false }
-  ]
+  useEffect(() => {
+    const fetchNotifications = () => {
+      const saved = localStorage.getItem('notifications_list')
+      if (saved) {
+        try {
+          setNotifications(JSON.parse(saved))
+        } catch (e) {
+          console.error(e)
+        }
+      } else {
+        const defaults = [
+          { id: 'notif-1', text: 'Consensus reached for block #592', time: '5m ago', unread: true },
+          { id: 'notif-2', text: 'Access request authorized for Dr. Sarah Miller', time: '12m ago', unread: true },
+          { id: 'notif-3', text: 'Ledger backup completed successfully', time: '1h ago', unread: false }
+        ]
+        localStorage.setItem('notifications_list', JSON.stringify(defaults))
+        setNotifications(defaults)
+      }
+    }
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 2000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleMarkAllRead = () => {
+    const updated = notifications.map(n => ({ ...n, unread: false }))
+    setNotifications(updated)
+    localStorage.setItem('notifications_list', JSON.stringify(updated))
+    toast.success('All notifications marked as read.')
+  }
+
+  const handleToggleRead = (id) => {
+    const updated = notifications.map(n => {
+      if (n.id === id) return { ...n, unread: !n.unread }
+      return n
+    })
+    setNotifications(updated)
+    localStorage.setItem('notifications_list', JSON.stringify(updated))
+  }
+
+  const handleDeleteNotification = (id, e) => {
+    e.stopPropagation()
+    const updated = notifications.filter(n => n.id !== id)
+    setNotifications(updated)
+    localStorage.setItem('notifications_list', JSON.stringify(updated))
+    toast.success('Notification removed.')
+  }
 
   const handleLogout = () => {
     logout()
@@ -67,24 +110,50 @@ export default function Topbar() {
               <div className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
                 <span className="font-bold text-xs text-slate-800 dark:text-slate-200">Notifications</span>
                 <button 
-                  onClick={() => toast.success('All marked as read')}
-                  className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 hover:underline"
+                  onClick={handleMarkAllRead}
+                  className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
                 >
                   Mark all read
                 </button>
               </div>
-              <div className="space-y-2.5">
-                {notifications.map(n => (
-                  <div key={n.id} className="flex justify-between items-start text-[11px] hover:bg-slate-50 dark:hover:bg-slate-950 p-1.5 rounded-lg transition-colors cursor-pointer">
-                    <div className="space-y-0.5 max-w-[200px]">
-                      <p className={`leading-snug ${n.unread ? 'font-semibold text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {n.text}
-                      </p>
-                      <span className="text-[9px] text-slate-400 font-mono">{n.time}</span>
+              <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                {notifications.length === 0 ? (
+                  <div className="text-center py-4 text-slate-400 text-xs">No notifications</div>
+                ) : (
+                  notifications.map(n => (
+                    <div 
+                      key={n.id} 
+                      className={`flex items-start justify-between gap-2.5 text-[11px] p-2 rounded-xl transition-all duration-200 ${
+                        n.unread 
+                          ? 'bg-purple-500/5 dark:bg-purple-450/5 hover:bg-purple-500/10 dark:hover:bg-purple-450/10 border-l-2 border-purple-500' 
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-950 border-l-2 border-transparent'
+                      }`}
+                    >
+                      <button 
+                        onClick={() => handleToggleRead(n.id)}
+                        className="mt-0.5 text-slate-400 hover:text-purple-650 dark:hover:text-purple-400 transition-colors cursor-pointer flex-shrink-0"
+                        title={n.unread ? "Mark as read" : "Mark as unread"}
+                      >
+                        {n.unread ? <FiCircle className="w-3.5 h-3.5" /> : <FiCheckCircle className="w-3.5 h-3.5 text-emerald-500" />}
+                      </button>
+                      
+                      <div className="flex-1 min-w-0">
+                        <p className={`leading-snug break-words ${n.unread ? 'font-bold text-slate-900 dark:text-slate-100' : 'text-slate-550 dark:text-slate-400'}`}>
+                          {n.text}
+                        </p>
+                        <span className="text-[9px] text-slate-405 dark:text-slate-500 font-mono block mt-1">{n.time}</span>
+                      </div>
+
+                      <button 
+                        onClick={(e) => handleDeleteNotification(n.id, e)}
+                        className="mt-0.5 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer flex-shrink-0"
+                        title="Delete notification"
+                      >
+                        <FiTrash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    {n.unread && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1"></span>}
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
           )}

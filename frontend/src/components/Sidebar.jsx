@@ -15,7 +15,9 @@ export default function Sidebar() {
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
       { name: 'Upload File', path: '/upload', icon: FiUpload },
       { name: 'My Records', path: '/dashboard#my-records', icon: FiFileText },
-      { name: 'Who Accessed My Data', path: '/dashboard#who-accessed', icon: FiClock },
+      { name: 'My Providers', path: '/dashboard#providers', icon: FiUsers },
+      { name: 'Medical History', path: '/dashboard#history', icon: FiClock },
+      { name: 'Who Accessed My Data', path: '/dashboard#who-accessed', icon: FiActivity },
       { name: 'Profile', path: '/dashboard#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
