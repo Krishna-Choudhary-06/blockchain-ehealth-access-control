@@ -12,12 +12,15 @@ export const assignLevel = async (userId, level) => {
     return res.data;
 };
 
-export const uploadRecord = async (patientId, dataId, level, file) => {
+export const uploadRecord = async (patientId, dataId, level, file, authorizedUsers = []) => {
     const formData = new FormData();
     formData.append('medicalFile', file);
     formData.append('patientId', patientId);
     formData.append('dataId', dataId);
     formData.append('level', level);
+    if (authorizedUsers && authorizedUsers.length > 0) {
+        formData.append('authorizedUsers', JSON.stringify(authorizedUsers));
+    }
 
     const res = await axios.post(`${API_BASE_URL}/upload`, formData);
     return res.data;
@@ -34,6 +37,28 @@ export const getLogs = async () => {
 };
 
 export const getSystemStats = async () => {
-    const res = await axios.get(`${API_BASE_URL}/system-stats`);
+    const res = await axios.get(`${API_BASE_URL}/health`);
+    return res.data;
+};
+
+export const getPublicKey = async () => {
+    const res = await axios.get(`${API_BASE_URL}/public-key`);
+    return res.data;
+};
+
+export const downloadRecord = async (ipfsHash) => {
+    const res = await axios.get(`${API_BASE_URL}/download/${ipfsHash}`, {
+        responseType: 'arraybuffer'
+    });
+    return res.data;
+};
+
+export const revokeAccess = async (dataId, revokedUserId) => {
+    const res = await axios.post(`${API_BASE_URL}/revoke`, { dataId, revokedUserId });
+    return res.data;
+};
+
+export const addAuthorizedUser = async (dataId, currentUsers, newUsers) => {
+    const res = await axios.post(`${API_BASE_URL}/add-authorized`, { dataId, currentUsers, newUsers });
     return res.data;
 };
