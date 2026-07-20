@@ -75,7 +75,7 @@ export async function downloadFile(cid) {
 
   // Try retrieving via backend proxy first
   try {
-    const response = await axios.get(`http://localhost:3000/api/ipfs/${cid}`, {
+    const response = await axios.get(`http://localhost:3000/api/download/${cid}`, {
       responseType: 'arraybuffer',
       timeout: 2000
     });

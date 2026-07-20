@@ -211,9 +211,8 @@ export default function Upload() {
       const encryptedBlob = new Blob([encryptedData], { type: 'application/octet-stream' })
       const encryptedFileObj = new File([encryptedBlob], `${file.name}.enc`, { type: 'application/octet-stream' })
       
-      // Reverse map: UI L0 -> Blockchain L3, UI L1 -> Blockchain L2, UI L2 -> Blockchain L1, UI L3 -> Blockchain L0
-      const reverseMapping = { 'L0': 'L3', 'L1': 'L2', 'L2': 'L1', 'L3': 'L0' }
-      const mappedLevel = reverseMapping[sensitivityLevel] || 'L3'
+      // Directly pass privacy level (L0 - Doctor Only, L1 - Lab, L2 - Staff, L3 - Public)
+      const mappedLevel = sensitivityLevel || 'L0'
 
       // Resolve actual registered patientId from localStorage or session
       let resolvedPatientId = patientName.replace(/ /g, '')
