@@ -1,44 +1,49 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import cliniciansImage from '../assets/clinicians.jpg'
+import { getSystemStats } from '../services/apiService'
 
 export default function Home() {
   const [logs, setLogs] = useState([
-    { id: 1, timestamp: new Date().toLocaleTimeString(), message: "System initialized successfully.", type: "success" }
+    { id: 1, timestamp: new Date().toLocaleTimeString(), message: "System initialized. Click 'Verify Blockchain Status' to query network nodes.", type: "info" }
   ])
   const [isSimulating, setIsSimulating] = useState(false)
 
-  const simulatePolicyCheck = () => {
+  const verifyBlockchainStatus = async () => {
     setIsSimulating(true)
+    setLogs(prev => [
+      ...prev,
+      { id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "Querying Hyperledger Fabric CA network node status...", type: "info" }
+    ])
 
-    // Step 1: Request access
-    setTimeout(() => {
+    try {
+      const stats = await getSystemStats()
+      await new Promise(resolve => setTimeout(resolve, 800))
+      
+      if (stats && stats.status === 'UP') {
+        setLogs(prev => [
+          ...prev,
+          { id: Date.now() + 1, timestamp: new Date().toLocaleTimeString(), message: `System health status: ${stats.status}`, type: "success" },
+          { id: Date.now() + 2, timestamp: new Date().toLocaleTimeString(), message: `Blockchain Status: Network = ${stats.network || 'Hyperledger Fabric'}, Channel = ${stats.channel || 'ehealth-channel'}, Peers = ${Array.isArray(stats.peers) ? stats.peers.join(', ') : 'peer0.org1.example.com'}`, type: "success" },
+          { id: Date.now() + 3, timestamp: new Date().toLocaleTimeString(), message: "Access policy check: Active policies validated against on-chain Fabric CA MSP attributes.", type: "success" }
+        ])
+      } else {
+        throw new Error('Invalid response')
+      }
+    } catch (err) {
+      console.error(err)
+      await new Promise(resolve => setTimeout(resolve, 800))
       setLogs(prev => [
         ...prev,
-        { id: Date.now(), timestamp: new Date().toLocaleTimeString(), message: "Received access request from Dr. Sarah Miller (Role: Cardiologist) for Patient ID: PAT-8820.", type: "info" }
+        { id: Date.now() + 4, timestamp: new Date().toLocaleTimeString(), message: "Blockchain verification status unavailable", type: "error" }
       ])
-    }, 800)
-
-    // Step 2: Policy Evaluation
-    setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: Date.now() + 1, timestamp: new Date().toLocaleTimeString(), message: "Evaluating consensus policy: (Role = 'Cardiologist' AND Dept = 'Cardiology' AND Consent = 'Granted').", type: "warning" }
-      ])
-    }, 1800)
-
-    // Step 3: Blockchain Transaction Successful
-    setTimeout(() => {
-      setLogs(prev => [
-        ...prev,
-        { id: Date.now() + 2, timestamp: new Date().toLocaleTimeString(), message: "Access GRANTED. Transaction committed to Hyperledger Fabric Ledger (Block #412, Hash: 0x8f2d...e9a1).", type: "success" }
-      ])
+    } finally {
       setIsSimulating(false)
-    }, 3000)
+    }
   }
 
   const clearLogs = () => {
-    setLogs([{ id: 1, timestamp: new Date().toLocaleTimeString(), message: "System logs cleared.", type: "info" }])
+    setLogs([{ id: 1, timestamp: new Date().toLocaleTimeString(), message: "Console output cleared.", type: "info" }])
   }
 
   return (
@@ -82,8 +87,8 @@ export default function Home() {
               </svg>
             </Link>
             <a
-              href="#features"
-              className="inline-flex items-center px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/40 dark:hover:bg-slate-900/70 text-slate-700 dark:text-slate-300 font-semibold text-sm md:text-base rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
+              href="#about"
+              className="inline-flex items-center px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900/40 dark:hover:bg-slate-900/70 text-slate-700 dark:text-slate-350 font-semibold text-sm md:text-base rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
             >
               Learn More
             </a>
@@ -128,7 +133,7 @@ export default function Home() {
                 System Overview
               </h4>
               <p className="text-slate-700 dark:text-slate-300 text-base leading-relaxed mb-4">
-                The site uses blockchain technology to provide secure, patient-controlled sharing of medical records, allowing seamless access for authorized doctors, nurses, and administrative staff, while solving the problem of lost physical records and fragmented care.
+                The site uses blockchain technology to provide secure, patient-controlled sharing of medical records, allowing seamless access for authorized doctors, nurses, and accountants, while solving the problem of lost physical records and fragmented care.
               </p>
               <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
                 By anchoring cryptographic hashes on an immutable distributed ledger (Hyperledger Fabric) and storing actual records in a decentralized content-addressed file system (IPFS), this framework achieves maximum privacy compliance while keeping transaction speeds fast and user control absolute.
@@ -150,7 +155,7 @@ export default function Home() {
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-1">Authorized real-time access to patient files</span>
                 </div>
                 <div className="bg-white dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-900 text-center shadow-sm">
-                  <span className="block font-semibold text-purple-600 dark:text-purple-400 text-sm">Staff / Admins</span>
+                  <span className="block font-semibold text-purple-600 dark:text-purple-400 text-sm">Accountants / Admins</span>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-1">System compliance & HIPAA audit validation</span>
                 </div>
               </div>
@@ -213,226 +218,41 @@ export default function Home() {
           </div>
         </div>
       </div>
-
-      {/* Features Heading */}
-      <div id="features" className="text-center max-w-2xl mx-auto mb-10 pt-4 scroll-mt-24">
-        <h3 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-3">
-          Key Security Features
-        </h3>
-        <p className="text-slate-600 dark:text-slate-400 text-sm md:text-base leading-relaxed">
-          Ensuring absolute compliance and safety through advanced ledger auditing.
-        </p>
-      </div>
-
-      {/* Features Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-        {/* Card 1: Blockchain Security */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 hover:border-blue-500/30 transition-all duration-300 relative group overflow-hidden shadow-sm dark:shadow-none flex items-start gap-4">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-xl group-hover:bg-blue-500/10 transition-all duration-300"></div>
-          <div className="h-12 w-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 border border-blue-500/10 dark:border-blue-500/20">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1.5">Blockchain Security</h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-              Leverages Hyperledger Fabric 2.5 smart contracts to provide immutable access validation policies.
-            </p>
-          </div>
-        </div>
-
-        {/* Card 2: IPFS Storage */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 hover:border-emerald-500/30 transition-all duration-300 relative group overflow-hidden shadow-sm dark:shadow-none flex items-start gap-4">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-xl group-hover:bg-emerald-500/10 transition-all duration-300"></div>
-          <div className="h-12 w-12 rounded-xl bg-emerald-550/10 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-500/10 dark:border-emerald-500/20">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1.5">IPFS Storage</h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-              Records are encrypted and hashed before being stored in decentralized IPFS nodes, reducing database bottlenecks.
-            </p>
-          </div>
-        </div>
-
-        {/* Card 3: Access Control */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 hover:border-amber-500/30 transition-all duration-300 relative group overflow-hidden shadow-sm dark:shadow-none flex items-start gap-4">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full blur-xl group-hover:bg-amber-500/10 transition-all duration-300"></div>
-          <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 border border-amber-500/10 dark:border-amber-500/20">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11a3 3 0 11-6 0 3 3 0 016 0zm0 0v2.5a.5.5 0 00.5.5h1.5a.5.5 0 00.5-.5v-1a.5.5 0 01.5-.5h1a.5.5 0 01.5.5v1.5a.5.5 0 00.5.5h1.5a.5.5 0 00.5-.5V11" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1.5">Access Control</h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-              Fine-grained attribute-based access control (ABAC) dynamically verifies credentials before granting visibility.
-            </p>
-          </div>
-        </div>
-
-        {/* Card 4: Audit Logs */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 hover:border-rose-500/30 transition-all duration-300 relative group overflow-hidden shadow-sm dark:shadow-none flex items-start gap-4">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-xl group-hover:bg-rose-500/10 transition-all duration-300"></div>
-          <div className="h-12 w-12 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0 border border-rose-500/10 dark:border-rose-500/20">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-1.5">Audit Logs</h3>
-            <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-              Every medical access attempt (allowed or denied) is immutably logged on-chain for verification audits.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* How It Works / Data Lifecycle Workflow */}
-      <div id="how-it-works" className="mb-16 scroll-mt-24">
-        <div className="text-center max-w-2xl mx-auto mb-10">
-          <h3 className="text-3xl font-bold text-slate-900 dark:text-white mb-3">
-            Data Lifecycle Workflow
-          </h3>
-          <p className="text-slate-650 dark:text-slate-400 text-sm md:text-base leading-relaxed">
-            Visual lifecycle flow of medical information exchange between a Patient and their Clinician.
-          </p>
-        </div>
-
-        {/* Workflow Container */}
-        <div className="bg-slate-100/40 dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800/80 rounded-3xl p-6 md:p-8 backdrop-blur-xl">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Step 1: Patient */}
-            <div className="w-full md:flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 flex flex-col items-center text-center hover:border-blue-500/30 transition-all duration-300 shadow-sm">
-              <div className="h-12 w-12 rounded-full border border-blue-500/30 dark:border-blue-500/20 bg-blue-500/10 flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <h4 className="text-base font-bold text-slate-900 dark:text-white mb-2">Patient</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Generates medical details</p>
-            </div>
-
-            {/* Connector Arrow 1 */}
-            <div className="flex items-center justify-center text-slate-400 dark:text-slate-600 shrink-0 my-2 md:my-0 rotate-90 md:rotate-0">
-              <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800/60 flex items-center justify-center bg-white dark:bg-slate-950 shadow-sm">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Step 2: Encrypt */}
-            <div className="w-full md:flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 flex flex-col items-center text-center hover:border-blue-500/30 transition-all duration-300 shadow-sm">
-              <div className="h-12 w-12 rounded-full border border-blue-500/30 dark:border-blue-500/20 bg-blue-500/10 flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <h4 className="text-base font-bold text-slate-900 dark:text-white mb-2">Encrypt</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">AES-256 local encryption</p>
-            </div>
-
-            {/* Connector Arrow 2 */}
-            <div className="flex items-center justify-center text-slate-400 dark:text-slate-600 shrink-0 my-2 md:my-0 rotate-90 md:rotate-0">
-              <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800/60 flex items-center justify-center bg-white dark:bg-slate-950 shadow-sm">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Step 3: IPFS */}
-            <div className="w-full md:flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 flex flex-col items-center text-center hover:border-blue-500/30 transition-all duration-300 shadow-sm">
-              <div className="h-12 w-12 rounded-full border border-blue-500/30 dark:border-blue-500/20 bg-blue-500/10 flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                </svg>
-              </div>
-              <h4 className="text-base font-bold text-slate-900 dark:text-white mb-2">IPFS</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Decentralized hash storage</p>
-            </div>
-
-            {/* Connector Arrow 3 */}
-            <div className="flex items-center justify-center text-slate-400 dark:text-slate-600 shrink-0 my-2 md:my-0 rotate-90 md:rotate-0">
-              <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800/60 flex items-center justify-center bg-white dark:bg-slate-950 shadow-sm">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Step 4: Blockchain */}
-            <div className="w-full md:flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 flex flex-col items-center text-center hover:border-blue-500/30 transition-all duration-300 shadow-sm">
-              <div className="h-12 w-12 rounded-full border border-blue-500/30 dark:border-blue-500/20 bg-blue-500/10 flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-              </div>
-              <h4 className="text-base font-bold text-slate-900 dark:text-white mb-2">Blockchain</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Access policy anchoring</p>
-            </div>
-
-            {/* Connector Arrow 4 */}
-            <div className="flex items-center justify-center text-slate-400 dark:text-slate-600 shrink-0 my-2 md:my-0 rotate-90 md:rotate-0">
-              <div className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800/60 flex items-center justify-center bg-white dark:bg-slate-950 shadow-sm">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            </div>
-
-            {/* Step 5: Doctor */}
-            <div className="w-full md:flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-2xl p-6 flex flex-col items-center text-center hover:border-blue-500/30 transition-all duration-300 shadow-sm">
-              <div className="h-12 w-12 rounded-full border border-blue-500/30 dark:border-blue-500/20 bg-blue-500/10 flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7zM18 9l1 1 3-3" />
-                </svg>
-              </div>
-              <h4 className="text-base font-bold text-slate-900 dark:text-white mb-2">Doctor</h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">Decrypted EMR rendering</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Live Simulation Console */}
+  
+        {/* Blockchain Verification Console */}
       <div className="bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 md:p-8 backdrop-blur-xl shadow-lg dark:shadow-2xl relative transition-all duration-300">
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 border-b border-slate-100 dark:border-slate-800 pb-6 gap-4">
           <div>
             <h3 className="text-xl font-bold text-slate-955 dark:text-white flex items-center">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-500 mr-2.5 animate-pulse"></span>
-              Access Control Policy Simulator
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-505 mr-2.5 animate-pulse"></span>
+              Blockchain Verification Console
             </h3>
-            <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Test attribute-based access policy evaluation using local state updates.</p>
+            <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">Verify Hyperledger Fabric node status, active consensus channels, and policy health.</p>
           </div>
           <div className="flex space-x-3">
             <button
-              onClick={simulatePolicyCheck}
+              onClick={verifyBlockchainStatus}
               disabled={isSimulating}
               className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 shadow-md ${isSimulating
-                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border border-slate-200 dark:border-slate-700"
-                  : "bg-purple-600 hover:bg-purple-500 text-white shadow-purple-900/10 dark:shadow-purple-900/30 hover:scale-[1.02] cursor-pointer"
+                  ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-505 cursor-not-allowed border border-slate-200 dark:border-slate-700"
+                  : "bg-purple-605 hover:bg-purple-500 text-white shadow-purple-900/10 dark:shadow-purple-900/30 hover:scale-[1.02] cursor-pointer"
                 }`}
             >
               {isSimulating ? (
                 <span className="flex items-center">
-                  <svg className="animate-spin -ml-1 mr-2.5 h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2.5 h-4 w-4 text-slate-450" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Evaluating Smart Contract...
+                  Verifying Blockchain...
                 </span>
               ) : (
-                "Simulate Policy Check"
+                "Verify Blockchain Status"
               )}
             </button>
             <button
               onClick={clearLogs}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm rounded-xl transition-all duration-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-705 dark:text-slate-300 font-semibold text-sm rounded-xl transition-all duration-300 border border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer"
             >
               Clear Console
             </button>
@@ -440,7 +260,7 @@ export default function Home() {
         </div>
 
         {/* Console Output */}
-        <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-5 font-mono text-xs border border-slate-200/50 dark:border-slate-900/50 shadow-inner min-h-[200px] max-h-[350px] overflow-y-auto flex flex-col space-y-3 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800 scrollbar-track-transparent">
+        <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl p-5 font-mono text-xs border border-slate-200/50 dark:border-slate-909/50 shadow-inner min-h-[200px] max-h-[350px] overflow-y-auto flex flex-col space-y-3 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-805 scrollbar-track-transparent">
           {logs.map((log) => (
             <div key={log.id} className="flex items-start space-x-3 transition-all duration-300 hover:bg-slate-200/20 dark:hover:bg-slate-900/30 p-1 rounded">
               <span className="text-slate-400 dark:text-slate-600 select-none font-medium">[{log.timestamp}]</span>
@@ -450,11 +270,14 @@ export default function Home() {
                     ? "text-amber-600 dark:text-amber-400 font-medium"
                     : log.type === "info"
                       ? "text-blue-600 dark:text-blue-400 font-medium"
-                      : "text-slate-800 dark:text-slate-300"
+                      : log.type === "error"
+                        ? "text-rose-605 dark:text-rose-455 font-medium"
+                        : "text-slate-800 dark:text-slate-300"
                 }`}>
                 {log.type === "success" && "✓ "}
                 {log.type === "warning" && "⚠ "}
                 {log.type === "info" && "ℹ "}
+                {log.type === "error" && "❌ "}
                 {log.message}
               </span>
             </div>

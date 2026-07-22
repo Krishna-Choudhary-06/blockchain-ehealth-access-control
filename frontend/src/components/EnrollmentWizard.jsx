@@ -7,7 +7,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle, Loader2, ShieldAlert, 
   Cpu, Copy, Check, ExternalLink, ShieldCheck, Key, X, Shield 
 } from 'lucide-react'
-import { generateUserKeyPair, getDelay, generatePublicKeyFingerprint, addOnChainTx } from '../services/cryptoService'
+import { generateUserKeyPair, getDelay, generatePublicKeyFingerprint } from '../services/cryptoService'
 import { registerUser, assignLevel } from '../services/apiService'
 import StepProgress from './StepProgress'
 import RoleSelector from './RoleSelector'
@@ -225,7 +225,6 @@ export default function EnrollmentWizard() {
       }
 
       setTxDetails(transactionData)
-      addOnChainTx(formData.name, `Register User Identity (Role: ${formData.role})`, mockTxHash, transactionData.blockNumber, 'Granted')
       setLoading(false)
       toast.success('Identity node enrolled and committed to ledger!', { id: toastId })
     } catch (error) {

@@ -313,51 +313,7 @@ export function revokeUserAccess(sharedKeys, userId) {
  * Initializes RSA keys for the default simulation users (Doctors, Nurses) if not present.
  */
 export async function initializeMockUsersKeys() {
-  if (typeof window === 'undefined') return;
-  
-  if (localStorage.getItem('mock_keys_initialized')) return;
-
-  const defaultUsers = [
-    { name: 'Dr. Sarah Miller', role: 'Doctor', organization: 'Cardiology Dept', email: 'sarah.miller@nit.edu' },
-    { name: 'Dr. James Watson', role: 'Doctor', organization: 'Cardiology Dept', email: 'james.watson@health.com' },
-    { name: 'Nurse Kelly Smith', role: 'Nurse', organization: 'General Ward', email: 'kelly.smith@nit.edu' },
-    { name: 'Patient Alex Carter', role: 'Patient', organization: 'Self', email: 'alex.carter@gmail.com' }
-  ];
-
-  const existingUsers = JSON.parse(localStorage.getItem('registered_users') || '[]');
-
-  for (const user of defaultUsers) {
-    const exists = existingUsers.some(u => u.name === user.name);
-    if (!exists) {
-      try {
-        const keyPair = await generateUserKeyPair();
-        const userId = await generatePublicKeyFingerprint(keyPair.publicKey);
-        
-        localStorage.setItem(`user_keys_${user.name}`, JSON.stringify({
-          userId,
-          name: user.name,
-          role: user.role,
-          email: user.email,
-          organization: user.organization,
-          publicKey: keyPair.publicKey,
-          privateKey: keyPair.privateKey
-        }));
-
-        existingUsers.push({
-          userId,
-          name: user.name,
-          role: user.role,
-          organization: user.organization,
-          publicKey: keyPair.publicKey
-        });
-      } catch (e) {
-        console.error("Failed to generate keys for default user", user.name, e);
-      }
-    }
-  }
-
-  localStorage.setItem('registered_users', JSON.stringify(existingUsers));
-  localStorage.setItem('mock_keys_initialized', 'true');
+  // No-op: Simulation removed
 }
 
 export function getDelay(ms) {
@@ -368,44 +324,5 @@ export function getDelay(ms) {
 }
 
 export function addOnChainTx(sender, action, txHash, blockNumber, status = 'Granted') {
-  if (typeof window === 'undefined') return;
-
-  const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const blockNum = blockNumber || Math.floor(Math.random() * 200) + 413;
-
-  const newTx = {
-    id: txHash || '0x' + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    block: blockNum,
-    sender: sender,
-    action: action,
-    status: status,
-    time: timestampStr
-  };
-
-  const newBlock = {
-    number: blockNum,
-    hash: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    txCount: 1,
-    size: `${(1.1 + Math.random() * 1.5).toFixed(1)} KB`,
-    time: 'Just now',
-    prevHash: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    merkleRoot: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    validator: ['peer0.nit.ehealth.org', 'peer1.hospital.ehealth.org', 'peer2.labs.ehealth.org', 'peer3.client.ehealth.org'][Math.floor(Math.random() * 4)]
-  };
-
-  const txs = JSON.parse(localStorage.getItem('explorer_txs') || '[]');
-  localStorage.setItem('explorer_txs', JSON.stringify([newTx, ...txs].slice(0, 100)));
-
-  const blocks = JSON.parse(localStorage.getItem('explorer_blocks') || '[]');
-  localStorage.setItem('explorer_blocks', JSON.stringify([newBlock, ...blocks].slice(0, 100)));
-
-  const feedItem = {
-    id: Date.now(),
-    type: status === 'Denied' ? 'read_denied' : action.includes('Upload') ? 'upload_success' : 'read_success',
-    text: `${sender} performed ${action} (Status: ${status})`,
-    time: 'Just now',
-    role: sender.toLowerCase().includes('nurse') ? 'Nurse' : sender.toLowerCase().includes('patient') ? 'Patient' : 'Doctor'
-  };
-  const feeds = JSON.parse(localStorage.getItem('explorer_feeds') || '[]');
-  localStorage.setItem('explorer_feeds', JSON.stringify([feedItem, ...feeds].slice(0, 50)));
+  // No-op: Simulation removed
 }
