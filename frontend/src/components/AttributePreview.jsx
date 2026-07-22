@@ -20,9 +20,9 @@ const rolePermissions = {
     { text: 'Download Medical History', allowed: true },
     { text: 'Update Records directly', allowed: false }
   ],
-  Staff: [
-    { text: 'View Administrative Records', allowed: true },
-    { text: 'Process Patient Registration', allowed: true },
+  Accountant: [
+    { text: 'View Billing & Financial Records', allowed: true },
+    { text: 'Process Financial Claims', allowed: true },
     { text: 'Access Clinic Worklogs', allowed: true },
     { text: 'Access Clinical Diagnostics Data', allowed: false }
   ]

@@ -5,10 +5,8 @@ import {
   FiFile, FiX, FiEye, FiClock, FiDatabase, FiUser, 
   FiAlertCircle, FiArrowRight, FiShield 
 } from 'react-icons/fi'
-import { encryptFile, shareKeyWithUsers, addOnChainTx } from '../services/cryptoService'
 import { uploadRecord } from '../services/apiService'
 import { useAuth } from '../hooks/useAuth'
-import { cacheMockIpfs } from '../services/ipfsService'
 
 
 
@@ -50,7 +48,7 @@ export default function Upload() {
   const sensitivityLevels = [
     { code: 'L0', name: 'L0 - Doctor Only', desc: 'Restricted only to authorized doctors.', color: 'text-red-500 bg-red-50 dark:bg-red-955/20 border-red-200 dark:border-red-900/30' },
     { code: 'L1', name: 'L1 - Lab Access', desc: 'Access allowed for laboratory diagnostics.', color: 'text-amber-500 bg-amber-50 dark:bg-amber-955/20 border-amber-200 dark:border-amber-900/30' },
-    { code: 'L2', name: 'L2 - Authorized Staff', desc: 'Clinical support staffs and nurses access.', color: 'text-blue-500 bg-blue-50 dark:bg-blue-955/20 border-blue-200 dark:border-blue-900/30' },
+    { code: 'L2', name: 'L2 - Authorized Accountant', desc: 'Clinical support accountants and nurses access.', color: 'text-blue-500 bg-blue-50 dark:bg-blue-955/20 border-blue-200 dark:border-blue-900/30' },
     { code: 'L3', name: 'L3 - Public Access', desc: 'Public health dataset or general access.', color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-955/20 border-emerald-200 dark:border-emerald-900/30' }
   ]
 
@@ -190,28 +188,7 @@ export default function Upload() {
     setResult(null)
 
     try {
-      // 1. Read file as ArrayBuffer
-      const fileBuffer = await file.arrayBuffer()
-      setProgress(25)
-      setCurrentStep('Encrypting file locally with AES-256-CBC...')
-
-      // 2. Perform AES local encryption
-      const { encryptedData, key, iv } = await encryptFile(fileBuffer)
-      
-      setProgress(50)
-      setCurrentStep('Generating AES-256 Symmetric Key and unique IV vector...')
-
-      // 3. Instead of IPFS upload locally, we'll send it to the backend which does it!
-      setProgress(70)
-      setCurrentStep('Sending encrypted data to Backend for IPFS + Blockchain ledger upload...')
-      
-      const fileId = reportId || 'DATA-' + Math.floor(1000 + Math.random() * 9000);
-      
-      // We need to send it as a Blob/File
-      const encryptedBlob = new Blob([encryptedData], { type: 'application/octet-stream' })
-      const encryptedFileObj = new File([encryptedBlob], `${file.name}.enc`, { type: 'application/octet-stream' })
-      
-      // Directly pass privacy level (L0 - Doctor Only, L1 - Lab, L2 - Staff, L3 - Public)
+      const fileId = reportId || 'DATA-' + Math.floor(1000 + Math.random() * 9000)
       const mappedLevel = sensitivityLevel || 'L0'
 
       // Resolve actual registered patientId from localStorage or session
@@ -224,67 +201,50 @@ export default function Upload() {
         resolvedPatientId = user.userId
       }
 
-      let apiResult
-      try {
-        apiResult = await uploadRecord(resolvedPatientId, fileId, mappedLevel, encryptedFileObj)
-      } catch (apiErr) {
-        console.warn('Backend API upload failed, falling back to client-side IPFS simulation:', apiErr)
-        toast.error('Fabric network offline. Uploading via local client-side IPFS simulation.', { duration: 4000 })
-        const chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
-        const mockCid = 'Qm' + Array.from({ length: 44 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-        apiResult = {
-          success: true,
-          data: {
-            ipfsHash: mockCid
-          }
-        }
-      }
-      
-      if (apiResult && apiResult.success === false) throw new Error(apiResult.error || 'Upload failed at backend')
-      
-      // Getting back the IPFS Hash from the backend
-      const cid = apiResult?.data?.ipfsHash || apiResult?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
-
-      // Cache the encrypted file data buffer in the mock IPFS registry for robust fallback retrieval
-      cacheMockIpfs(cid, encryptedData)
-
-
-      // 4. Secure key sharing (RSA-OAEP)
-      // Retrieve registered users to encrypt the AES key with their public keys
-      const usersToShareWith = registeredUsers.filter(u => {
+      // Calculate authorized users set based on sensitivity level
+      const authorizedUserIds = registeredUsers.filter(u => {
         if (u.role === 'Doctor' || u.role === 'Admin') return true
         if (sensitivityLevel === 'L2' || sensitivityLevel === 'L3') {
           if (u.role === 'Nurse') return true
         }
         return false
-      })
+      }).map(u => u.userId)
 
-      // Encrypt the AES key for all authorized users
-      const sharedKeys = await shareKeyWithUsers(key, usersToShareWith)
+      setProgress(45)
+      setCurrentStep('Uploading raw file to Backend for BGW Encryption + IPFS Upload...')
 
-      const mockTxId = 'tx_' + Array.from({ length: 32 }, () => 
-        Math.floor(Math.random() * 16).toString(16)
-      ).join('')
+      let apiResult
+      try {
+        apiResult = await uploadRecord(resolvedPatientId, fileId, mappedLevel, file, authorizedUserIds)
+      } catch (apiErr) {
+        console.error('Backend upload API failed:', apiErr)
+        throw new Error('Upload service unavailable')
+      }
 
-      const certId = 'CERT-' + Math.floor(100000 + Math.random() * 900000)
+      if (apiResult && apiResult.success === false) {
+        throw new Error(apiResult.error || apiResult.message || 'Upload failed at backend')
+      }
+
+      // Getting back the IPFS Hash from the backend
+      const cid = apiResult?.data?.ipfsHash || apiResult?.ipfsHash || 'CID_MISSING_FROM_BACKEND'
+      const txId = apiResult?.txId || apiResult?.data?.txId || 'N/A'
+      const certId = apiResult?.certificateId || apiResult?.data?.certificateId || 'N/A'
+      const uploadTime = apiResult?.data?.storedAt || new Date().toLocaleString()
 
       // Store in localStorage patient records list so it can be retrieved across dashboards
       const ledgerRecord = {
-        id: reportId || 'PAT-' + Math.floor(1000 + Math.random() * 9000),
-        name: `${reportId || 'PAT-' + Math.floor(1000 + Math.random() * 9000)}: ${file.name}`,
+        id: fileId,
+        name: `${fileId}: ${file.name}`,
         category: recordCategory,
         sensitivity: sensitivityLevel,
         ipfsHash: cid,
-        uploadTime: new Date().toLocaleString(),
-        aesKeyHex: key, // Keep for Patient self-decryption
-        ivHex: iv,
-        sharedKeys: sharedKeys, // userId -> encrypted key base64
+        uploadTime: uploadTime,
         patientName: patientName,
         fileName: file.name,
         fileSize: formatBytes(file.size),
         encryptionStatus: 'Encrypted (AES-256-CBC)',
         certificateId: certId,
-        txId: mockTxId
+        txId: txId
       }
 
       // Add dynamic notification
@@ -306,24 +266,22 @@ export default function Upload() {
       
       setResult({
         ipfsHash: cid,
-        txId: mockTxId,
+        txId: txId,
         encryptionStatus: 'Encrypted (AES-256-CBC)',
         fileName: file.name,
         fileSize: formatBytes(file.size),
-        uploadTime: ledgerRecord.uploadTime,
+        uploadTime: uploadTime,
         patientName: patientName,
         sensitivityLevel: sensitivityLevel,
         certificateId: certId
       })
 
-      const uploadBlockNumber = Math.floor(Math.random() * 200) + 420;
-      addOnChainTx(patientName, `Upload Secure Record ${ledgerRecord.id} (Sensitivity: ${sensitivityLevel})`, mockTxId, uploadBlockNumber, 'Granted');
-
       setUploading(false)
       toast.success('Medical record securely committed to Blockchain and IPFS!')
     } catch (error) {
       console.error(error)
-      toast.error(`Symmetric encryption or IPFS upload failed: ${error.message}`)
+      const errorMsg = error.message === 'Upload service unavailable' ? 'Upload service unavailable' : `Symmetric encryption or IPFS upload failed: ${error.message}`;
+      toast.error(errorMsg)
       setUploading(false)
       setProgress(0)
       setCurrentStep('')
@@ -419,21 +377,7 @@ export default function Upload() {
               <h2 className="text-xl font-bold text-slate-950 dark:text-white">Upload Specifications</h2>
               
               <form onSubmit={handleSubmit} className="space-y-6">
-                 <button
-                  id="mock-upload-btn"
-                  type="button"
-                  onClick={() => {
-                    const mockContent = `PATIENT NAME: Alex Carter\nDIAGNOSIS: Stable recovery following mild exercise-induced arrhythmia.\nRECOMMENDED TREATMENT: Daily cardiovascular checkups, low-sodium diet, and moderate physical activities.\nRESTRICTION LEVEL: Highly Confidential\nGENOMIC DATA SHA-256: 3a9a141b7829ac252dbef23f8b0e7a2b0e9f1a2380d90d81014ac2460d5b78ab\n`;
-                    const mockFile = new File([mockContent], 'medical_report.pdf', { type: 'application/pdf' });
-                    setFile(mockFile);
-                    setReportId('PAT-' + Math.floor(1000 + Math.random() * 9000));
-                    toast.success('Mock file loaded successfully!');
-                  }}
-                  className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-350 rounded-2xl py-3.5 font-bold text-xs border border-dashed border-slate-300 dark:border-slate-800 transition-all text-center cursor-pointer mb-2"
-                >
-                  Load E2E Verification Mock Report (PDF)
-                </button>
-                
+
                 {/* Patient Name field */}
                 <div className="space-y-1.5">
                   <label htmlFor="patientName" className="text-xs font-bold text-slate-650 dark:text-slate-350 uppercase tracking-wider block">
@@ -493,7 +437,7 @@ export default function Upload() {
                   >
                     <option value="L0">L0 — Doctor Only</option>
                     <option value="L1">L1 — Lab Access</option>
-                    <option value="L2">L2 — Authorized Staff</option>
+                    <option value="L2">L2 — Authorized Accountant</option>
                     <option value="L3">L3 — Public Access</option>
                   </select>
 

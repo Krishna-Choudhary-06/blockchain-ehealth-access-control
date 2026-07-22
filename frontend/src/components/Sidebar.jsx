@@ -36,7 +36,7 @@ export default function Sidebar() {
       { name: 'Profile', path: '/dashboard#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
-    Staff: [
+    Accountant: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
       { name: 'Access Logs', path: '/dashboard#access-logs', icon: FiClock },
       { name: 'Profile', path: '/dashboard#profile', icon: FiUser },

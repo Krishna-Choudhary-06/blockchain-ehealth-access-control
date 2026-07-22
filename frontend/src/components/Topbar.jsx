@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import toast from 'react-hot-toast'
 import { FiSun, FiMoon, FiBell, FiLogOut, FiChevronDown, FiUser, FiTrash2, FiCheckCircle, FiCircle } from 'react-icons/fi'
+import { getLogs } from '../services/apiService'
 
 export default function Topbar() {
   const { user, logout } = useAuth()
@@ -15,27 +16,32 @@ export default function Topbar() {
   const [notifications, setNotifications] = useState([])
 
   useEffect(() => {
-    const fetchNotifications = () => {
-      const saved = localStorage.getItem('notifications_list')
-      if (saved) {
-        try {
-          setNotifications(JSON.parse(saved))
-        } catch (e) {
-          console.error(e)
+    let isMounted = true
+    const fetchNotifications = async () => {
+      try {
+        const rawLogs = await getLogs()
+        if (isMounted && Array.isArray(rawLogs)) {
+          const mappedNotifications = rawLogs.slice(0, 5).map((log, i) => ({
+            id: `notif-${i}`,
+            text: `${log.requesterId || log.userId || 'User'} requested access to file ${log.dataId || ''} - Status: ${log.status || 'Logged'}`,
+            time: log.timestamp ? (isNaN(new Date(log.timestamp).getTime()) ? log.timestamp : new Date(log.timestamp).toLocaleTimeString()) : 'Just now',
+            unread: true
+          }))
+          setNotifications(mappedNotifications)
         }
-      } else {
-        const defaults = [
-          { id: 'notif-1', text: 'Consensus reached for block #592', time: '5m ago', unread: true },
-          { id: 'notif-2', text: 'Access request authorized for Dr. Sarah Miller', time: '12m ago', unread: true },
-          { id: 'notif-3', text: 'Ledger backup completed successfully', time: '1h ago', unread: false }
-        ]
-        localStorage.setItem('notifications_list', JSON.stringify(defaults))
-        setNotifications(defaults)
+      } catch (err) {
+        console.error('Failed to load notifications from logs:', err)
+        if (isMounted) {
+          setNotifications([])
+        }
       }
     }
     fetchNotifications()
-    const interval = setInterval(fetchNotifications, 2000)
-    return () => clearInterval(interval)
+    const interval = setInterval(fetchNotifications, 5000)
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
   }, [])
 
   const handleMarkAllRead = () => {

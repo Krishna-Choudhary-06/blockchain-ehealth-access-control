@@ -1,65 +1,48 @@
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
 import Performance from '../pages/Performance'
+import { getPerformanceStats } from '../services/apiService'
 
-// Mock react-hot-toast
-vi.mock('react-hot-toast', () => ({
-  default: {
-    loading: vi.fn(() => 'toast-id'),
-    success: vi.fn(),
-    error: vi.fn()
-  }
+// Mock apiService
+vi.mock('../services/apiService', () => ({
+  getPerformanceStats: vi.fn()
 }))
 
 describe('Performance Component', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
     vi.clearAllMocks()
   })
 
-  test('renders all options, chart titles, and action controls', () => {
-    render(<Performance />)
-    
-    expect(screen.getByText(/Performance Experiments/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Execute Benchmark/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Reset/i })).toBeInTheDocument()
-    
-    // Check chart titles
-    expect(screen.getByText(/Figure 2: Latency vs Transaction Count/i)).toBeInTheDocument()
-    expect(screen.getByText(/Figure 3: Throughput vs Workload/i)).toBeInTheDocument()
-    expect(screen.getByText(/Figure 4: Communication Network Overhead/i)).toBeInTheDocument()
-    expect(screen.getByText(/Computation Overhead/i)).toBeInTheDocument()
+  afterEach(() => {
+    vi.clearAllMocks()
   })
 
-  test('triggers experiment running, advances progress, and completes simulation', () => {
-    render(<Performance />)
-    
-    const runBtn = screen.getByRole('button', { name: /Execute Benchmark/i })
-    fireEvent.click(runBtn)
-    
-    // Should show setting up cluster message
-    expect(screen.getByText(/Starting simulation initialization/i)).toBeInTheDocument()
-    
-    // Fast-forward timers
-    act(() => {
-      vi.runAllTimers()
+  test('shows loading indicator on mount and displays benchmark stats on success', async () => {
+    getPerformanceStats.mockResolvedValueOnce({
+      latency: 45,
+      tps: 278,
+      blockCommitTime: 500
     })
-    
-    // Should show completed simulation message
-    expect(screen.getAllByText(/Completed simulation/i).length).toBeGreaterThan(0)
+
+    render(<Performance />)
+
+    expect(screen.getByText(/Loading benchmark stats/i)).toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(screen.getByText(/Performance Experiments/i)).toBeInTheDocument()
+      expect(screen.getByText(/45 ms/i)).toBeInTheDocument()
+      expect(screen.getByText(/278 TPS/i)).toBeInTheDocument()
+      expect(screen.getByText(/500 ms/i)).toBeInTheDocument()
+    })
   })
 
-  test('renders literature comparison grid', () => {
+  test('displays fallback empty state when API call fails', async () => {
+    getPerformanceStats.mockRejectedValueOnce(new Error('Network Error'))
+
     render(<Performance />)
-    
-    expect(screen.getByText(/Literature Benchmarking Comparison Matrix/i)).toBeInTheDocument()
-    expect(screen.getAllByText('MedRec').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('MedShare').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('MedChain').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Proposed Method').length).toBeGreaterThan(0)
+
+    await waitFor(() => {
+      expect(screen.getByText(/No benchmark data available/i)).toBeInTheDocument()
+    })
   })
 })

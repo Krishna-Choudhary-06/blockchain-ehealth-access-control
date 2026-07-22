@@ -62,3 +62,8 @@ export const addAuthorizedUser = async (dataId, currentUsers, newUsers) => {
     const res = await axios.post(`${API_BASE_URL}/add-authorized`, { dataId, currentUsers, newUsers });
     return res.data;
 };
+
+export const getPerformanceStats = async () => {
+    const res = await axios.get(`${API_BASE_URL}/performance/stats`);
+    return res.data;
+};
