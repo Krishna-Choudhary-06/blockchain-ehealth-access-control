@@ -317,10 +317,15 @@
     "alpha": "3724f07d451807243a986b679fa0d03b1fe5a14b408a2f45036bd2d411f8e764",
     "gamma": "3a35cd08659a01fa281b8ca25774abf9b02aad9d55bcba5ce07506b45c307dad"
   },
-  "numericUserIdCounter": 4,
+  "numericUserIdCounter": 9,
   "userIdMap": {
     "doc_001": 1,
     "patient_002": 2,
-    "doc_002": 3
+    "doc_002": 3,
+    "UID-0AEC84D7": 4,
+    "UID-E1698B08": 5,
+    "UID-9FBEB49E": 6,
+    "UID-1F389264": 7,
+    "UID-BF73A625": 8
   }
 }
