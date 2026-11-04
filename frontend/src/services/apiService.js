@@ -12,14 +12,50 @@ export const assignLevel = async (userId, level) => {
     return res.data;
 };
 
-export const uploadRecord = async (patientId, dataId, level, file, authorizedUsers = []) => {
+export const setupBGW = async (maxUsers) => {
+    const res = await axios.post(`${API_BASE_URL}/bgw/setup`, { maxUsers });
+    return res.data;
+};
+
+export const getBGWState = async () => {
+    const res = await axios.get(`${API_BASE_URL}/bgw/state`);
+    return res.data;
+};
+
+export const generateBGWPrivateKey = async (recipientId, masterSecret, publicKey) => {
+    const res = await axios.post(`${API_BASE_URL}/bgw/keygen`, {
+        recipientId,
+        masterSecret,
+        publicKey
+    });
+    return res.data;
+};
+
+export const registerUserProfile = async ({ userId, role, privacyLevel, bgwRecipientId, organization }) => {
+    const res = await axios.post(`${API_BASE_URL}/users/profile`, {
+        userId,
+        role,
+        privacyLevel,
+        bgwRecipientId,
+        organization
+    });
+    return res.data;
+};
+
+export const uploadRecord = async (patientId, dataId, file, options = {}) => {
     const formData = new FormData();
     formData.append('medicalFile', file);
     formData.append('patientId', patientId);
     formData.append('dataId', dataId);
-    formData.append('level', level);
-    if (authorizedUsers && authorizedUsers.length > 0) {
-        formData.append('authorizedUsers', JSON.stringify(authorizedUsers));
+    formData.append('level', options.level || 'L0');
+    formData.append('category', options.category || '');
+    formData.append('ownerId', options.ownerId || '');
+    formData.append('ownerRecipientId', options.ownerRecipientId || '');
+    formData.append('uploadedBy', options.uploadedBy || '');
+    formData.append('uploaderRole', options.uploaderRole || '');
+    formData.append('organization', options.organization || '');
+    if (options.bgwPublicKey) {
+        formData.append('bgwPublicKey', JSON.stringify(options.bgwPublicKey));
     }
 
     const res = await axios.post(`${API_BASE_URL}/upload`, formData);
@@ -31,39 +67,67 @@ export const requestAccess = async (requesterId, dataId) => {
     return res.data;
 };
 
-export const getLogs = async () => {
-    const res = await axios.get(`${API_BASE_URL}/logs`);
-    return res.data;
-};
-
-export const getSystemStats = async () => {
-    const res = await axios.get(`${API_BASE_URL}/health`);
-    return res.data;
-};
-
-export const getPublicKey = async () => {
-    const res = await axios.get(`${API_BASE_URL}/public-key`);
-    return res.data;
-};
-
-export const downloadRecord = async (ipfsHash) => {
-    const res = await axios.get(`${API_BASE_URL}/download/${ipfsHash}`, {
-        responseType: 'arraybuffer'
+export const requestAccessAndDecrypt = async (requesterId, dataId, privateKey, publicKey, requesterRole = '') => {
+    const res = await axios.post(`${API_BASE_URL}/access`, {
+        requesterId,
+        dataId,
+        privateKey,
+        publicKey,
+        requesterRole
     });
     return res.data;
 };
 
-export const revokeAccess = async (dataId, revokedUserId) => {
-    const res = await axios.post(`${API_BASE_URL}/revoke`, { dataId, revokedUserId });
+export const getUsers = async () => {
+    const res = await axios.get(`${API_BASE_URL}/users`);
     return res.data;
 };
 
-export const addAuthorizedUser = async (dataId, currentUsers, newUsers) => {
-    const res = await axios.post(`${API_BASE_URL}/add-authorized`, { dataId, currentUsers, newUsers });
+export const getDataRecords = async () => {
+    const res = await axios.get(`${API_BASE_URL}/data`);
     return res.data;
 };
 
-export const getPerformanceStats = async () => {
-    const res = await axios.get(`${API_BASE_URL}/performance/stats`);
+export const getLogs = async () => {
+    const res = await axios.get(`${API_BASE_URL}/logs`);
     return res.data;
 };
+export const addRecipients = async (
+  dataId,
+  recipientIds,
+  authorizedUsers = [],
+  requesterId = ''
+) => {
+  // Map frontend's recipientIds to newUsers and authorizedUsers to currentUsers for backend
+  const res = await axios.post(
+    `${API_BASE_URL}/add-authorized`,
+    {
+      dataId,
+      newUsers: recipientIds, // The ID of the user to grant access
+      currentUsers: authorizedUsers,
+      requesterId
+    }
+  )
+
+  return res.data
+}
+
+export const removeRecipients = async (
+  dataId,
+  recipientIds,
+  authorizedUsers = [],
+  requesterId = ''
+) => {
+  // The backend revoke endpoint expects 'revokedUserId' (string userId or recipient ID) and 'dataId'
+  const targetRevoked = (authorizedUsers && authorizedUsers[0]) || recipientIds[0]
+  const res = await axios.post(
+    `${API_BASE_URL}/revoke`,
+    {
+      dataId,
+      revokedUserId: targetRevoked,
+      requesterId
+    }
+  )
+
+  return res.data
+}

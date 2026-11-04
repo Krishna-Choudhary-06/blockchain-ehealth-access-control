@@ -31,6 +31,10 @@ Decrypt for i in S:
 The AES-GCM layer is only a DEM that encrypts bytes under HKDF(K). It is not
 a simplified broadcast-encryption replacement.
 */
+/**
+ * Constructs a standardized envelope object containing the BGW ciphertext,
+ * along with IPFS and Hyperledger Fabric metadata for integration into the blockchain healthcare system.
+ */
 function fabricIpfsEnvelope({ bgwCiphertext, ipfsCid, fabricAssetId, metadata = {} }) {
   return {
     type: 'BGW_IPFS_HEALTHCARE_ENVELOPE',
@@ -44,6 +48,10 @@ function fabricIpfsEnvelope({ bgwCiphertext, ipfsCid, fabricAssetId, metadata = 
   };
 }
 
+/**
+ * Encrypts a payload using BGW and wraps the resulting ciphertext into a Fabric/IPFS envelope.
+ * Automatically injects the necessary info string and optionally exports the update token.
+ */
 async function encryptForIpfs(publicKey, recipientIds, payload, options = {}) {
   const bgwCiphertext = await encrypt(
     publicKey,
@@ -65,6 +73,10 @@ console.log("RAW UPDATE TOKEN:", bgwCiphertext.updateToken);
   });
 }
 
+/**
+ * Decrypts a payload that was packaged inside a Fabric/IPFS envelope.
+ * Extracts the BGW header and encrypted payload from the envelope and performs BGW decryption.
+ */
 async function decryptFromIpfsEnvelope(publicKey, privateKey, envelope, options = {}) {
   return decrypt(
     publicKey,

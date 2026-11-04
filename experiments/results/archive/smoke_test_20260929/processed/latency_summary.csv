@@ -1,0 +1,3 @@
+block_size,method,workload,total_transactions,successful_transactions,failed_transactions,avg_latency_ms,median_latency_ms,p95_latency_ms,min_latency_ms,max_latency_ms,std_latency_ms,success_rate_pct
+10.0,bgw_broadcast,2.0,2,2,0,2198.7233834997824,2198.7233834997824,2201.1492313497,2196.0279969998737,2201.418769999691,3.8118521440081405,100.0
+10.0,bgw_broadcast,5.0,5,5,0,2213.3885627999007,2197.118785999919,2259.790065999914,2196.706833999997,2274.301596999976,34.11459409866916,100.0

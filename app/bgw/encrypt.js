@@ -2,6 +2,11 @@
 
 const ctx = require('./context');
 
+/**
+ * Deserializes a BGW05 public key object.
+ * Validates the scheme, reconstructs G1/G2 elements from hex strings,
+ * and builds mappings for the g and h powers required for encryption.
+ */
 function deserializePublicKey(publicKey) {
   if (!publicKey || publicKey.scheme !== 'BGW05') {
     throw new Error('Expected a BGW05 public key.');
@@ -24,6 +29,10 @@ function deserializePublicKey(publicKey) {
   };
 }
 
+/**
+ * Normalizes, deduplicates, and validates the array of recipient IDs.
+ * Sorts IDs numerically and asserts each is a valid recipient within public parameter n.
+ */
 function normalizeRecipients(recipientIds, n) {
   const ids = [...new Set(recipientIds.map(Number))].sort((a, b) => a - b);
   if (ids.length === 0) {
@@ -33,6 +42,11 @@ function normalizeRecipients(recipientIds, n) {
   return ids;
 }
 
+/**
+ * Computes the Broadcast Encryption (BGW) header components and session key.
+ * This function calculates C0 and C1 based on the BGW scheme mathematics,
+ * and derives the target session secret GT element using bilinear pairings.
+ */
 function computeHeader(publicKey, recipientIds, t) {
   const pk = deserializePublicKey(publicKey);
   const recipients = normalizeRecipients(recipientIds, pk.n);
@@ -62,6 +76,10 @@ function computeHeader(publicKey, recipientIds, t) {
   };
 }
 
+/**
+ * Encrypts a plaintext message for a specific set of recipients using the BGW Broadcast Encryption scheme.
+ * Derives the symmetric AES key from the BGW session key and uses AES-256-GCM to encrypt the payload.
+ */
 async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
   await ctx.init();
 
@@ -78,10 +96,10 @@ async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
 
   const key = ctx.kdfFromGT(computed.keyGt, options.info || 'payload');
   const encryptedPayload = ctx.aesGcmEncrypt(
-  key,
-  plaintext,
-  options.aad || null
-);
+    key,
+    plaintext,
+    options.aad || null
+  );
 
   const result = {
     header,
@@ -93,6 +111,10 @@ async function encrypt(publicKey, recipientIds, plaintext, options = {}) {
   return result;
 }
 
+/**
+ * Key Encapsulation Mechanism (KEM) based on the BGW Broadcast Encryption scheme.
+ * Instead of encrypting a payload, it generates a random session key and an encapsulation header.
+ */
 async function encapsulate(publicKey, recipientIds, options = {}) {
   await ctx.init();
   const t = options.t ? ctx.frFromHex(options.t) : ctx.randomFr();

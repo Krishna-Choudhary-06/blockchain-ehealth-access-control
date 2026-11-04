@@ -5,6 +5,19 @@ export function bufferToHex(buffer) {
     .join('');
 }
 
+export function generateSalt(bytes = 16) {
+  const salt = new Uint8Array(bytes);
+  window.crypto.getRandomValues(salt);
+  return bufferToHex(salt.buffer);
+}
+
+export async function hashPassword(password, salt) {
+  const encoder = new TextEncoder();
+  const payload = encoder.encode(`${salt}:${password}`);
+  const digest = await window.crypto.subtle.digest('SHA-256', payload);
+  return bufferToHex(digest);
+}
+
 // Helper to convert Hex string to ArrayBuffer
 export function hexToBuffer(hex) {
   if (hex.length % 2 !== 0) {
@@ -171,43 +184,6 @@ export async function generateUserKeyPair() {
 }
 
 /**
- * Deterministically generates a certificate identifier (fingerprint) from a PEM public key.
- * @param {string} publicKeyPem 
- * @returns {Promise<string>} deterministic certificate ID
- */
-export async function generatePublicKeyFingerprint(publicKeyPem) {
-  try {
-    const cleanPem = publicKeyPem
-      .replace(/-----BEGIN [A-Z ]+-----/, "")
-      .replace(/-----END [A-Z ]+-----/, "")
-      .replace(/\s/g, "");
-    
-    // Decode base64 to binary string then to Uint8Array
-    const binaryStr = window.atob(cleanPem);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-    
-    // Compute SHA-256 hash of the public key bytes
-    const hashBuffer = await window.crypto.subtle.digest("SHA-256", coerceToNative(bytes));
-    
-    // Convert hash buffer to hex
-    const hashHex = Array.from(new Uint8Array(hashBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-      
-    // Format identifier: Take the first 8 hex characters, uppercase
-    return 'UID-' + hashHex.substring(0, 8).toUpperCase();
-  } catch (err) {
-    console.error('Failed to generate key fingerprint:', err);
-    // Secure fallback if crypto fails
-    return 'UID-' + Math.floor(100000 + Math.random() * 900000);
-  }
-}
-
-
-/**
  * Encrypts a symmetric key using a user's RSA public key
  * @param {string} symmetricKey 
  * @param {string} publicKeyPem 
@@ -310,19 +286,10 @@ export function revokeUserAccess(sharedKeys, userId) {
 }
 
 /**
- * Initializes RSA keys for the default simulation users (Doctors, Nurses) if not present.
+ * Helper to get delay based on test or production context.
+ * Returns 1ms during tests to keep execution fast.
  */
-export async function initializeMockUsersKeys() {
-  // No-op: Simulation removed
-}
-
 export function getDelay(ms) {
-  const isTest = (typeof globalThis.process !== 'undefined' && (globalThis.process.env?.NODE_ENV === 'test' || globalThis.process.env?.VITEST)) ||
-                 (typeof window !== 'undefined' && (window.vitest || window.vi || window.__vitest_worker__)) ||
-                 (typeof globalThis !== 'undefined' && (globalThis.vitest || globalThis.vi || globalThis.__vitest_worker__));
+  const isTest = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.VITEST);
   return isTest ? 1 : ms;
-}
-
-export function addOnChainTx(sender, action, txHash, blockNumber, status = 'Granted') {
-  // No-op: Simulation removed
 }

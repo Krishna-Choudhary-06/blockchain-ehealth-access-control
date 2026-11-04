@@ -1,0 +1,3 @@
+block_size,method,workload,sample_count,avg_request_bytes,avg_response_bytes,avg_total_comm_bytes,avg_payload_bytes
+10.0,bgw_broadcast,2.0,2,152.0,360.0,512.0,49.0
+10.0,bgw_broadcast,5.0,5,152.0,360.0,512.0,49.0

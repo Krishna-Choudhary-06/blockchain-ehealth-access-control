@@ -1,0 +1,60 @@
+experiment:
+  name: base_paper_replication
+  description: "Replication of An Adaptive Blockchain-Enabled Access Control Framework for Secure and Privacy-Preserving E-Health Data Sharing"
+  repetitions: 3
+  warmup_requests: 5
+  seed: 42
+
+fabric:
+  network_path: /home/krishna/fabric-samples/test-network
+  channel: healthchannel
+  chaincode: healthcontract
+  block_sizes:
+    - 5
+    - 10
+    - 15
+    - 20
+  batch_timeout: 2s
+
+workload:
+  client_counts:
+    - 10
+    - 20
+    - 30
+    - 40
+    - 50
+    - 60
+    - 70
+    - 80
+    - 90
+    - 100
+  transaction_rates:
+    low_rate: 10
+    high_rate: 50
+    target_rates:
+      - 10
+      - 25
+      - 50
+
+backend:
+  base_url: http://127.0.0.1:3000
+  timeout_seconds: 30
+
+ipfs:
+  api_url: http://127.0.0.1:5001
+  gateway_url: http://127.0.0.1:8080
+  timeout_seconds: 30
+
+methods:
+  evaluated:
+    - bgw_broadcast
+    - baseline_repeated_encryption
+  future_placeholders:
+    - cp_abe
+    - proxy_re_encryption
+
+output:
+  raw_dir: experiments/results/raw
+  processed_dir: experiments/results/processed
+  figures_dir: experiments/results/figures
+  metadata_dir: experiments/results/metadata

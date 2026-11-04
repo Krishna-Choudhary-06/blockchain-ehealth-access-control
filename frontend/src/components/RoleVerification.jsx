@@ -1,7 +1,24 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { CheckCircle2, ShieldCheck, Heart, UserCheck, ArrowRight } from 'lucide-react'
 
-export default function RoleVerification({ verifiedUser, onProceed, onPatientBypass }) {
+export default function RoleVerification({ verifiedUser, onProceed, onPatientBypass, autoProceed = false }) {
+  const didAutoProceed = useRef(false)
+
+  useEffect(() => {
+    if (!autoProceed || didAutoProceed.current || !verifiedUser) return
+
+    didAutoProceed.current = true
+    const timeout = setTimeout(() => {
+      if (verifiedUser.role === 'Patient') {
+        onPatientBypass?.()
+      } else {
+        onProceed?.()
+      }
+    }, 350)
+
+    return () => clearTimeout(timeout)
+  }, [autoProceed, onPatientBypass, onProceed, verifiedUser])
+
   if (!verifiedUser) return null
 
   const { name, identityId, role, organization } = verifiedUser
@@ -56,11 +73,11 @@ export default function RoleVerification({ verifiedUser, onProceed, onPatientByp
           </div>
 
           <button
-            onClick={onProceed}
+            onClick={onPatientBypass}
             className="w-full mt-2 py-3 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <UserCheck className="w-4 h-4" />
-            Proceed to Password Authentication
+            Continue Directly to Patient Dashboard
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

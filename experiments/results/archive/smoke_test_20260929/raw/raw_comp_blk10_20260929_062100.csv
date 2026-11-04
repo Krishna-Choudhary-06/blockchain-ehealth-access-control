@@ -1,0 +1,8 @@
+run_id,experiment,block_size,method,workload,transaction_id,execution_time_ms,cpu_user_ms,cpu_system_ms,cpu_percent,memory_rss_mb,success,error
+comp_blk10_20260929_062100,figure5_computation,10,bgw_broadcast,2,rec_comp_e83ad13e,2195.4136990002553,0.0,0.0,1.4,83.3,True,
+comp_blk10_20260929_062100,figure5_computation,10,bgw_broadcast,2,rec_comp_9f93ce36,2226.196335000168,0.0,0.0,2.4,83.3,True,
+comp_blk10_20260929_062100,figure5_computation,10,bgw_broadcast,5,rec_comp_47e2b983,2163.514170000326,0.0,0.0,1.6,83.3,True,
+comp_blk10_20260929_062100,figure5_computation,10,bgw_broadcast,5,rec_comp_6a149609,2251.538163999612,0.0,0.0,1.7,83.3,True,
+comp_blk10_20260929_062100,figure5_computation,10,bgw_broadcast,5,rec_comp_f7c2c689,2203.7923910002064,10.000000000000009,0.0,1.2,83.3,True,
+comp_blk10_20260929_062100,figure5_computation,10,bgw_broadcast,5,rec_comp_456876b4,2171.6180680000434,0.0,0.0,1.6,83.3,True,
+comp_blk10_20260929_062100,figure5_computation,10,bgw_broadcast,5,rec_comp_01b295a3,2209.691159999693,0.0,0.0,2.1,83.3,True,

@@ -1,0 +1,3 @@
+block_size,method,concurrency,total_submitted,total_committed,avg_duration_sec,avg_committed_tps,avg_latency_ms,avg_cpu_percent,success_rate_pct
+10.0,bgw_broadcast,2.0,6,6,6.869477079000262,0.87,2288.2067115000004,11.450000000000001,100.0
+10.0,bgw_broadcast,4.0,12,12,7.473501339999984,1.61,2488.8089118333405,0.3,100.0

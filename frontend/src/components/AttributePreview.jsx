@@ -20,11 +20,17 @@ const rolePermissions = {
     { text: 'Download Medical History', allowed: true },
     { text: 'Update Records directly', allowed: false }
   ],
-  Accountant: [
-    { text: 'View Billing & Financial Records', allowed: true },
-    { text: 'Process Financial Claims', allowed: true },
-    { text: 'Access Clinic Worklogs', allowed: true },
-    { text: 'Access Clinical Diagnostics Data', allowed: false }
+  'Lab Technician': [
+    { text: 'View Lab Test Results', allowed: true },
+    { text: 'Record Diagnostic Data', allowed: true },
+    { text: 'Access Lab Department Records', allowed: true },
+    { text: 'Access Clinical Prescriptions', allowed: false }
+  ],
+  Admin: [
+    { text: 'Manage Users & Role Registry', allowed: true },
+    { text: 'Audit Access Policy Logs', allowed: true },
+    { text: 'Configure Consensus Parameters', allowed: true },
+    { text: 'View Patient Clinical Data', allowed: false }
   ]
 }
 
@@ -94,7 +100,14 @@ export default function AttributePreview({ formData }) {
           </div>
         )}
 
-
+        {role === 'Admin' && securityLevel && (
+          <div className="pt-2 border-t border-slate-200/50 dark:border-slate-900/50">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Clearance Level</span>
+            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+              <Lock className="w-3.5 h-3.5" /> Level-{securityLevel} Administration Authority
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Permissions List */}
@@ -126,6 +139,10 @@ export default function AttributePreview({ formData }) {
             </div>
           ))}
         </div>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl p-3">
+          <strong className="text-slate-700 dark:text-slate-200">Owner access:</strong>{' '}
+          The record owner always retains full access regardless of privacy level.
+        </div>
       </div>
 
       {/* Attribute Map JSON Preview */}
@@ -143,7 +160,9 @@ export default function AttributePreview({ formData }) {
                 org: organization || 'UNKNOWN',
                 ...(department && { dept: department }),
                 ...(patientId && { patient_id: patientId }),
-                ...(employeeId && { employee_id: employeeId })
+                ...(adminId && { admin_id: adminId }),
+                ...(employeeId && { employee_id: employeeId }),
+                ...(securityLevel && { clearance: securityLevel })
               },
               consensus_access_control: role ? 'ABAC_V2' : 'DEFAULT'
             },

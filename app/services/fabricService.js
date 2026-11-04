@@ -28,7 +28,7 @@ const ccpPath = path.resolve(
 );
 
 // Path to the wallet holding enrolled identities
-const walletPath = path.join(process.cwd(), 'wallet');
+const walletPath = path.resolve(__dirname, '..', 'wallet');
 
 // ─────────────────────────────────────────────────────────────
 // getContract — internal helper
@@ -229,12 +229,39 @@ async function getLogs() {
     }
 }
 
+async function getAllUsers() {
+    const { contract, gateway } = await getContract();
+    try {
+        const result = await contract.evaluateTransaction(
+            'UserRegistry:getAllUsers'
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
+async function getDataRecord(dataId) {
+    const { contract, gateway } = await getContract();
+    try {
+        const result = await contract.evaluateTransaction(
+            'DataStorage:getDataRecord',
+            dataId
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
 module.exports = {
     registerUser,
     assignLevel,
     storeHash,
     requestAccess,
-    revokeAccess,         // NEW
-    addAuthorizedUser,    // NEW
-    getLogs
+    revokeAccess,
+    addAuthorizedUser,
+    getLogs,
+    getAllUsers,
+    getDataRecord
 };

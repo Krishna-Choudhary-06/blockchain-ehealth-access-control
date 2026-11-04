@@ -3,8 +3,8 @@ import { Shield, Key, Cpu, UserCheck, Award } from 'lucide-react'
 
 export default function SecurityBadges() {
   const badges = [
-    { text: 'AES-256 Encrypted', icon: LockIcon },
-    { text: 'RSA-OAEP Protected', icon: Key },
+    { text: 'AES-256-GCM Payloads', icon: LockIcon },
+    { text: 'BGW Broadcast Protected', icon: Key },
     { text: 'Hyperledger Verified', icon: Cpu },
     { text: 'ABAC Enabled', icon: UserCheck },
     { text: 'Fabric CA Connected', icon: Award }

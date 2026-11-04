@@ -3,6 +3,11 @@
 const ctx = require('./context');
 const { deserializePublicKey } = require('./encrypt');
 
+/**
+ * Derives the session secret (GT element) from the BGW ciphertext header and the recipient's private key.
+ * Validates the scheme, verifies the recipient is in the header's recipient list, 
+ * and performs the bilinear pairings required by the BGW decryption equation.
+ */
 function deriveGT(publicKey, header, privateKey) {
   const pk = deserializePublicKey(publicKey);
 
@@ -49,6 +54,11 @@ function deriveGT(publicKey, header, privateKey) {
   return ctx.mcl.div(numerator, denominator);
 }
 
+/**
+ * Decrypts a BGW-encrypted payload.
+ * First computes the target session key using the BGW decryption equation (deriveGT),
+ * derives the symmetric AES key via KDF, and finally decrypts the payload using AES-256-GCM.
+ */
 async function decrypt(publicKey, header, privateKey, encryptedPayload, options = {}) {
   await ctx.init();
 

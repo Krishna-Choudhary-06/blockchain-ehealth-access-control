@@ -1,5 +1,5 @@
 import { useAuth } from '../hooks/useAuth'
-import { useLocation, Link } from 'react-router-dom'
+import { useLocation, Link, useNavigate } from 'react-router-dom'
 import { 
   FiGrid, FiUpload, FiClock, FiFileText, 
   FiActivity, FiUser, FiUsers, FiSettings
@@ -8,52 +8,70 @@ import {
 export default function Sidebar() {
   const { user } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
 
-  // Define menus for each role using full path routing
+  // Define menus for each role
   const menus = {
     Patient: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
       { name: 'Upload File', path: '/upload', icon: FiUpload },
-      { name: 'My Records', path: '/dashboard#my-records', icon: FiFileText },
-      { name: 'My Providers', path: '/dashboard#providers', icon: FiUsers },
-      { name: 'Medical History', path: '/dashboard#history', icon: FiClock },
-      { name: 'Who Accessed My Data', path: '/dashboard#who-accessed', icon: FiActivity },
-      { name: 'Profile', path: '/dashboard#profile', icon: FiUser },
+      { name: 'My Records', path: '#my-records', icon: FiFileText },
+      { name: 'Who Accessed My Data', path: '#who-accessed', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
     Doctor: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
-      { name: 'Upload Diagnosis', path: '/upload', icon: FiUpload },
-      { name: 'Patient Files', path: '/dashboard#records', icon: FiFileText },
-      { name: 'Access Logs', path: '/dashboard#logs', icon: FiClock },
-      { name: 'Profile', path: '/dashboard#profile', icon: FiUser },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
     Nurse: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
-      { name: 'Lab Reports', path: '/dashboard#lab-reports', icon: FiFileText },
-      { name: 'Access History', path: '/dashboard#access-history', icon: FiClock },
-      { name: 'Profile', path: '/dashboard#profile', icon: FiUser },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
+      { name: 'Explorer', path: '/explorer', icon: FiActivity }
+    ],
+    'Lab Technician': [
+      { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
     Accountant: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
-      { name: 'Access Logs', path: '/dashboard#access-logs', icon: FiClock },
-      { name: 'Profile', path: '/dashboard#profile', icon: FiUser },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Access Logs', path: '#logs', icon: FiClock },
+      { name: 'Profile', path: '#profile', icon: FiUser },
       { name: 'Explorer', path: '/explorer', icon: FiActivity }
     ],
     Admin: [
       { name: 'Dashboard', path: '/dashboard', icon: FiGrid },
-      { name: 'Users', path: '/dashboard#users', icon: FiUsers },
-      { name: 'Access Logs', path: '/dashboard#access-logs', icon: FiClock },
+      { name: 'Upload File', path: '/upload', icon: FiUpload },
+      { name: 'Patient Files', path: '#records', icon: FiFileText },
+      { name: 'Users', path: '#users', icon: FiUsers },
+      { name: 'Access Logs', path: '#access-logs', icon: FiClock },
       { name: 'Blockchain Explorer', path: '/explorer', icon: FiActivity },
       { name: 'Performance Monitor', path: '/performance', icon: FiActivity },
-      { name: 'Settings', path: '/dashboard#settings', icon: FiSettings }
+      { name: 'Settings', path: '#settings', icon: FiSettings }
     ]
   }
 
   const role = user?.role || 'Patient'
   const activeMenu = menus[role] || menus.Patient
+  const initials = (user?.name || 'Guest')
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
   return (
     <aside className="w-64 border-r border-slate-200 dark:border-slate-900 bg-white dark:bg-slate-950 flex flex-col justify-between h-screen sticky top-0 transition-colors duration-300">
@@ -78,13 +96,14 @@ export default function Sidebar() {
           </span>
           {activeMenu.map((item) => {
             const Icon = item.icon
-            const fullPath = location.pathname + location.hash
-            const isActive = fullPath === item.path || (location.pathname === '/dashboard' && location.hash === '' && item.path === '/dashboard')
+            const isActive = location.pathname === item.path || (item.path.startsWith('#') && location.hash === item.path)
+            const isHash = item.path.startsWith('#')
+            const hashTarget = isHash ? `/dashboard${item.path}` : item.path
             
             const linkClasses = `flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group relative ${
               isActive 
                 ? 'bg-purple-50 dark:bg-purple-900/10 text-purple-600 dark:text-purple-400 font-bold' 
-                : 'text-slate-650 hover:bg-slate-50 dark:text-slate-455 dark:hover:bg-slate-900/40 hover:text-slate-900 dark:hover:text-white'
+                : 'text-slate-650 hover:bg-slate-50 dark:text-slate-450 dark:hover:bg-slate-900/40 hover:text-slate-900 dark:hover:text-white'
             }`
 
             const iconElement = <Icon className={`w-5 h-5 mr-3 transition-transform duration-300 group-hover:scale-[1.08] ${isActive ? 'text-purple-600 dark:text-purple-400' : 'text-slate-405 dark:text-slate-500'}`} />
@@ -92,7 +111,18 @@ export default function Sidebar() {
               <span className="w-1 h-5 rounded-full bg-purple-600 dark:bg-purple-400 absolute left-0 top-1/2 transform -translate-y-1/2"></span>
             )
 
-            return (
+            return isHash ? (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => navigate(hashTarget)}
+                className={`${linkClasses} w-full text-left`}
+              >
+                {iconElement}
+                <span>{item.name}</span>
+                {activeIndicator}
+              </button>
+            ) : (
               <Link
                 key={item.name}
                 to={item.path}
@@ -110,11 +140,9 @@ export default function Sidebar() {
       {/* User Info footer in Sidebar */}
       <div className="p-6 border-t border-slate-200 dark:border-slate-900/50">
         <div className="flex items-center space-x-3">
-          <img 
-            src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80'} 
-            alt={user?.name} 
-            className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-880 border-slate-800 object-cover"
-          />
+          <div className="w-9 h-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-purple-600/10 text-purple-600 dark:text-purple-300 flex items-center justify-center text-[11px] font-black">
+            {initials}
+          </div>
           <div className="overflow-hidden">
             <h4 className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate">{user?.name || 'Guest User'}</h4>
             <span className="text-[9px] font-medium text-slate-450 bg-slate-100 dark:bg-slate-900 px-1.5 py-0.5 rounded-md mt-0.5 inline-block uppercase tracking-wider font-mono">

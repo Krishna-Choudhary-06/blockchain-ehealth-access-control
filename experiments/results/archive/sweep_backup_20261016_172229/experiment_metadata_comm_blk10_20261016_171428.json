@@ -1,0 +1,47 @@
+{
+  "run_id": "comm_blk10_20261016_171428",
+  "timestamp": "2026-10-16T17:14:28.001058Z",
+  "platform": "Windows 11 + WSL2",
+  "distro": "Ubuntu 24.04 LTS (x86_64)",
+  "kernel": "5.15.167.4-microsoft-standard-WSL2",
+  "hostname": "LAPTOP-7L7J02Q7",
+  "cpu": {
+    "model": "13th Gen Intel(R) Core(TM) i5-13420H",
+    "physical_cores": 6,
+    "logical_threads": 12,
+    "cpu_percent": 0.0
+  },
+  "memory": {
+    "total_gb": 9.72,
+    "available_gb": 7.71,
+    "used_gb": 2.0,
+    "percent": 20.6
+  },
+  "gpu": {
+    "available": true,
+    "model": "NVIDIA GeForce RTX 2050",
+    "vram_mb": 4096,
+    "driver_version": "592.82"
+  },
+  "storage": {
+    "total_gb": 1006.85,
+    "free_gb": 949.11,
+    "used_gb": 6.53,
+    "percent": 0.7
+  },
+  "runtime_versions": {
+    "python": "3.12.3",
+    "node": "v22.23.0",
+    "docker": "Docker Desktop 28.x (WSL2)",
+    "ipfs": "0.27.0",
+    "fabric": "2.x (test-network)",
+    "git_commit": "e138d3b7f11d3410b58fdbe46872bd2c2d39eb8d"
+  },
+  "fabric_configuration": {
+    "channel": "healthchannel",
+    "chaincode": "healthcontract",
+    "configured_block_size": 10,
+    "batch_timeout": "2s"
+  },
+  "hardware_disparity_limitation": "Local benchmark executed on single-node laptop (12 threads, ~10 GB RAM) rather than multi-node enterprise cluster from base paper."
+}

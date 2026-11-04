@@ -6,7 +6,9 @@ export default function Footer() {
   const { isAuthenticated } = useAuth()
 
   const platformLinks = [
-    { name: 'About', to: '/#about' }
+    { name: 'About', to: '/#about' },
+    { name: 'How It Works', to: '/#how-it-works' },
+    { name: 'Features', to: '/#features' }
   ]
 
   const resourceLinks = [

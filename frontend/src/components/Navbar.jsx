@@ -13,6 +13,8 @@ export default function Navbar() {
   const navLinks = [
     { name: 'Home Portal', to: '/' },
     { name: 'About', to: '/#about' },
+    { name: 'How It Works', to: '/#how-it-works' },
+    { name: 'Features', to: '/#features' },
     { name: 'User Registration', to: '/register' },
     ...(isAuthenticated 
       ? [{ name: 'Secure Dashboard', to: '/dashboard' }]

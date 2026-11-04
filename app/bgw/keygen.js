@@ -2,6 +2,10 @@
 
 const ctx = require('./context');
 
+/**
+ * Generates a private key for a specific recipient ID in the BGW scheme.
+ * Computes the user's private key component d_i = g^(gamma * alpha^i) using the master secret parameters.
+ */
 async function keygen(masterSecret, recipientId, publicKey) {
   await ctx.init();
 
@@ -34,6 +38,10 @@ async function keygen(masterSecret, recipientId, publicKey) {
   };
 }
 
+/**
+ * Generates private keys for multiple recipient IDs concurrently.
+ * Useful for bulk provisioning of users in the broadcast system.
+ */
 async function keygenMany(masterSecret, recipientIds, publicKey) {
   return Promise.all(recipientIds.map((id) => keygen(masterSecret, id, publicKey)));
 }
