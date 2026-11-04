@@ -1,0 +1,143 @@
+[
+  {
+    "dataId": "pat1-3-treatment-description-aryan-1793797863847",
+    "patientId": "rohan",
+    "ipfsHash": "QmdqLuh8w7wqDTcm8wFq4GyKWhhwsVsV51f63E8gftA7tz",
+    "requiredLevel": "L0",
+    "category": "prescription",
+    "storedAt": "2026-11-04T13:11:33.961Z",
+    "authorizedUsers": [
+      "rohan"
+    ],
+    "revokedUsers": [
+      "drshruti"
+    ],
+    "grantedUsers": [],
+    "metadata": {
+      "filename": "3_Treatment_Description_Aryan.pdf",
+      "category": "prescription",
+      "ownerId": "rohan",
+      "patientId": "rohan",
+      "uploadedBy": "drarjunmehta",
+      "uploaderRole": "Doctor",
+      "organization": "Metro General Hospital"
+    }
+  },
+  {
+    "dataId": "vinay-2-billing-statement-aryan-1793785500548",
+    "patientId": "vinay",
+    "ipfsHash": "QmV9aqJsFEbnMw6SurTx6JvCHxZu2ZbiaURGRDMAkUejTc",
+    "requiredLevel": "L3",
+    "category": "billing",
+    "storedAt": "2026-11-04T09:45:05.410Z",
+    "authorizedUsers": [
+      "vinay"
+    ],
+    "revokedUsers": [],
+    "grantedUsers": [],
+    "metadata": {
+      "filename": "2_Billing_Statement_Aryan.pdf",
+      "category": "billing",
+      "ownerId": "vinay",
+      "patientId": "vinay",
+      "uploadedBy": "vinay",
+      "uploaderRole": "Patient",
+      "organization": "Consortium Hospital"
+    }
+  },
+  {
+    "dataId": "rohan-2-billing-statement-aryan-1793779136898",
+    "patientId": "rohan",
+    "ipfsHash": "QmV9aqJsFEbnMw6SurTx6JvCHxZu2ZbiaURGRDMAkUejTc",
+    "requiredLevel": "L3",
+    "category": "billing",
+    "storedAt": "2026-11-04T07:59:00.501Z",
+    "authorizedUsers": [
+      "rohan"
+    ],
+    "revokedUsers": [],
+    "grantedUsers": [],
+    "metadata": {
+      "filename": "2_Billing_Statement_Aryan.pdf",
+      "category": "billing",
+      "ownerId": "rohan",
+      "patientId": "rohan",
+      "uploadedBy": "krishna",
+      "uploaderRole": "Admin",
+      "organization": "Metro General Hospital"
+    }
+  },
+  {
+    "dataId": "rohan-4-medical-history-aryan-1793778514139",
+    "patientId": "rohan",
+    "ipfsHash": "QmankYHCNrXpffyWCmUNBSBFKSjtuYUxMosRui5RfK8uYG",
+    "requiredLevel": "L2",
+    "category": "medical_history",
+    "storedAt": "2026-11-04T07:48:37.880Z",
+    "authorizedUsers": [
+      "rohan"
+    ],
+    "revokedUsers": [],
+    "grantedUsers": [],
+    "metadata": {
+      "filename": "4_Medical_History_Aryan.pdf",
+      "category": "medical_history",
+      "ownerId": "rohan",
+      "patientId": "rohan",
+      "uploadedBy": "rohan",
+      "uploaderRole": "Patient",
+      "organization": "Consortium Hospital"
+    }
+  },
+  {
+    "dataId": "rohan-prescription-test-cases-1793778354839",
+    "patientId": "rohan",
+    "ipfsHash": "QmRoYUEoBALxnry1q2qgMx3oCcouoEPvkGUZ3aoPWfxetL",
+    "requiredLevel": "L0",
+    "category": "prescription",
+    "storedAt": "2026-11-04T07:45:58.827Z",
+    "authorizedUsers": [
+      "rohan"
+    ],
+    "revokedUsers": [
+      "drarjunmehta"
+    ],
+    "grantedUsers": [],
+    "metadata": {
+      "filename": "prescription_test_cases.pdf",
+      "category": "prescription",
+      "ownerId": "rohan",
+      "patientId": "rohan",
+      "uploadedBy": "drshruti",
+      "uploaderRole": "Doctor",
+      "organization": "Metro General Hospital"
+    }
+  },
+  {
+    "dataId": "vinay-3-treatment-description-aryan-1793778178349",
+    "patientId": "vinay",
+    "ipfsHash": "QmdqLuh8w7wqDTcm8wFq4GyKWhhwsVsV51f63E8gftA7tz",
+    "requiredLevel": "L0",
+    "category": "prescription",
+    "storedAt": "2026-11-04T07:43:03.869Z",
+    "authorizedUsers": [
+      "vinay",
+      "drshruti",
+      "ramaya"
+    ],
+    "revokedUsers": [],
+    "grantedUsers": [
+      "drshruti",
+      "ramaya"
+    ],
+    "metadata": {
+      "filename": "3_Treatment_Description_Aryan.pdf",
+      "category": "prescription",
+      "ownerId": "vinay",
+      "patientId": "vinay",
+      "uploadedBy": "drarjunmehta",
+      "uploaderRole": "Doctor",
+      "organization": "Metro General Hospital"
+    }
+  }
+]

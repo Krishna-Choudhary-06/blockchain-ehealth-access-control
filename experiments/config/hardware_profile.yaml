@@ -1,0 +1,29 @@
+hardware:
+  platform: "Windows 11 + WSL2"
+  os: "Ubuntu 24.04 LTS (x86_64)"
+  kernel: "5.15.167.4-microsoft-standard-WSL2"
+  cpu:
+    model: "13th Gen Intel(R) Core(TM) i5-13420H"
+    cores: 8
+    threads: 12
+    max_frequency_ghz: 4.6
+  memory:
+    total_physical_gb: 16
+    allocated_to_wsl_gb: 9.7
+    effective_experiment_limit_gb: 10
+  gpu:
+    model: "NVIDIA GeForce RTX 2050"
+    vram_mb: 4096
+    cuda_version: "13.1"
+  storage:
+    type: "NVMe SSD"
+    free_gb: 950
+  docker:
+    runtime: "Docker Desktop (WSL2 Integration)"
+    daemon_socket: "/var/run/docker.sock"
+
+paper_disparity_notes:
+  - "Original paper evaluated on multi-node enterprise cluster servers."
+  - "Local evaluation runs on 12-thread mobile Core i5 laptop with 10 GB wsl RAM."
+  - "Absolute TPS and millisecond figures reflect this resource-constrained local deployment."
+  - "All comparative trends, block size curves, and BGW efficiency gains remain strictly valid and empirically measured."

@@ -1,0 +1,3 @@
+block_size,method,user_scale,total_users,avg_latency_ms,median_latency_ms,avg_comm_bytes,avg_cpu_percent
+10.0,bgw_broadcast,5.0,5,6485.780952600089,6472.595039000225,917.6,1.78
+10.0,bgw_broadcast,10.0,10,5435.12502009994,5429.6636139997645,845.5,1.97

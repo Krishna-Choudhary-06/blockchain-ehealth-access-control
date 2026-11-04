@@ -1,0 +1,8 @@
+run_id,experiment,block_size,method,workload,transaction_id,request_bytes,response_bytes,total_communication_bytes,payload_bytes,latency_ms,success,error
+comm_blk10_20260929_062018,figure4_communication,10,bgw_broadcast,2,rec_comm_6aee5ff0,152,360,512,49,2193.0202240000654,True,
+comm_blk10_20260929_062018,figure4_communication,10,bgw_broadcast,2,rec_comm_7cf38b50,152,360,512,49,2171.4890469997954,True,
+comm_blk10_20260929_062018,figure4_communication,10,bgw_broadcast,5,rec_comm_caa10eff,152,360,512,49,2196.1630569999215,True,
+comm_blk10_20260929_062018,figure4_communication,10,bgw_broadcast,5,rec_comm_2a9cfc7f,152,360,512,49,2187.867568999991,True,
+comm_blk10_20260929_062018,figure4_communication,10,bgw_broadcast,5,rec_comm_8233367f,152,360,512,49,2172.1782419999727,True,
+comm_blk10_20260929_062018,figure4_communication,10,bgw_broadcast,5,rec_comm_372ccb7e,152,360,512,49,2186.2204779999956,True,
+comm_blk10_20260929_062018,figure4_communication,10,bgw_broadcast,5,rec_comm_d5f793c7,152,360,512,49,2199.9014040002294,True,

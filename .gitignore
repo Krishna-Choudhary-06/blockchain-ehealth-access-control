@@ -1,6 +1,7 @@
 # Node modules - never share these
 node_modules/
 npm-debug.log
+npm-debug.log*
 
 # Environment files - contains secrets
 .env
@@ -11,17 +12,30 @@ organizations/
 channel-artifacts/
 system-genesis-block/
 
-# OS files
+# OS and IDE files
 .DS_Store
 Thumbs.db
+*Zone.Identifier
+*:Zone.Identifier
+.vscode/
+.idea/
 
 # Logs
 *.log
 logs/
 
-# Keys and certificates - security sensitive
+# Keys, wallets, and certificates - security sensitive
 *.pem
 *.key
-*.crtapp/wallet/
-*Zone.Identifier
-*:Zone.Identifier
+*.crt
+*.id
+app/wallet/
+wallet/
+
+# Python virtual environment and caches
+.venv/
+experiments/.venv/
+__pycache__/
+*.pyc
+scratch/
+experiments/scratch/
