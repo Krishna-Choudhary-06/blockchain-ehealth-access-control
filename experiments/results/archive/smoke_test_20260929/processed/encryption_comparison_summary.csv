@@ -1,0 +1,9 @@
+scheme,file_size_kb,recipient_count,total_latency_ms,file_crypto_ms,ipfs_re_upload_ms,header_update_ms,re_encrypted_file,re_uploaded_ipfs
+Baseline (Repeated Re-encryption),20,3,2203.0293660000098,29.57124799968369,2168.0278189996898,0.0,True,True
+Baseline (Repeated Re-encryption),20,6,166.65654100006577,55.90078300019741,107.42420799988396,0.0,True,True
+Baseline (Repeated Re-encryption),100,3,239.98461800010773,117.043351999655,117.28991700010738,0.0,True,True
+Baseline (Repeated Re-encryption),100,6,148.63723000007667,17.32883499971649,128.16933700014488,0.0,True,True
+Proposed (BGW Broadcast),20,3,3.0123470000944508,0.0,0.0,2.9765369999950053,False,False
+Proposed (BGW Broadcast),20,6,1.9864979999510977,0.0,0.0,1.960511000106635,False,False
+Proposed (BGW Broadcast),100,3,1.4771500000279048,0.0,0.0,1.452019000225846,False,False
+Proposed (BGW Broadcast),100,6,2.104808999774832,0.0,0.0,2.0789259997400222,False,False

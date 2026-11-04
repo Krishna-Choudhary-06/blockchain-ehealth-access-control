@@ -2,6 +2,10 @@
 
 const ctx = require('./context');
 
+/**
+ * Computes a "ladder" of points: base * alpha^1, base * alpha^2, ..., base * alpha^max.
+ * Used during BGW setup to precompute the powers of g and h.
+ */
 function powerLadder(base, alpha, max) {
   const powers = {};
   let alphaPower = alpha;
@@ -12,6 +16,10 @@ function powerLadder(base, alpha, max) {
   return powers;
 }
 
+/**
+ * Serializes a ladder of elliptic curve points to hex strings, skipping a specified index.
+ * In BGW, the term g_{n+1} is explicitly omitted from the public key, as it forms the broadcast secret.
+ */
 function serializeLadder(ladder, serializer, skipIndex) {
   return Object.fromEntries(
     Object.entries(ladder)
@@ -20,6 +28,11 @@ function serializeLadder(ladder, serializer, skipIndex) {
   );
 }
 
+/**
+ * Executes the trusted setup phase for the BGW broadcast encryption scheme.
+ * Generates the master secret (alpha, gamma) and the public key parameters (g, h, v, gPowers, hPowers)
+ * required for a maximum number of users (n).
+ */
 async function setup(options = {}) {
   await ctx.init();
 

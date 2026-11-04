@@ -80,8 +80,43 @@ function updateBroadcastHeader(pk, existingHeader, currentUsers, newUsers) {
     return updatedHeader;
 }
 
+/**
+ * Remove a user from the broadcast header.
+ * 
+ * @param {Object} header - The current broadcast header
+ * @param {string} userId - ID of the user to revoke
+ * @returns {Object} Updated broadcast header
+ */
+function revokeUserFromHeader(header, userId) {
+    if (header && header[userId]) {
+        delete header[userId];
+    }
+    return header;
+}
+
+/**
+ * Add a user to the broadcast header.
+ * 
+ * @param {Object} header - The current broadcast header
+ * @param {string} userId - ID of the new user
+ * @param {string} publicKeyPem - Public key of the new user
+ * @param {Buffer} aesKeyBuffer - The AES key to encrypt
+ * @returns {Object} Updated broadcast header
+ */
+function addUserToHeader(header, userId, publicKeyPem, aesKeyBuffer) {
+    // Encrypt the AES key with the user's public key
+    const rsaPublicKey = crypto.createPublicKey(publicKeyPem);
+    const encryptedKey = crypto.publicEncrypt(rsaPublicKey, aesKeyBuffer);
+    
+    // Add to header
+    header[userId] = encryptedKey.toString('base64');
+    return header;
+}
+
 module.exports = {
     buildBroadcastHeader,
     recoverKeyFromHeader,
-    updateBroadcastHeader
+    updateBroadcastHeader,
+    revokeUserFromHeader,
+    addUserToHeader
 };

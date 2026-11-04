@@ -5,6 +5,19 @@ export function bufferToHex(buffer) {
     .join('');
 }
 
+export function generateSalt(bytes = 16) {
+  const salt = new Uint8Array(bytes);
+  window.crypto.getRandomValues(salt);
+  return bufferToHex(salt.buffer);
+}
+
+export async function hashPassword(password, salt) {
+  const encoder = new TextEncoder();
+  const payload = encoder.encode(`${salt}:${password}`);
+  const digest = await window.crypto.subtle.digest('SHA-256', payload);
+  return bufferToHex(digest);
+}
+
 // Helper to convert Hex string to ArrayBuffer
 export function hexToBuffer(hex) {
   if (hex.length % 2 !== 0) {
@@ -171,43 +184,6 @@ export async function generateUserKeyPair() {
 }
 
 /**
- * Deterministically generates a certificate identifier (fingerprint) from a PEM public key.
- * @param {string} publicKeyPem 
- * @returns {Promise<string>} deterministic certificate ID
- */
-export async function generatePublicKeyFingerprint(publicKeyPem) {
-  try {
-    const cleanPem = publicKeyPem
-      .replace(/-----BEGIN [A-Z ]+-----/, "")
-      .replace(/-----END [A-Z ]+-----/, "")
-      .replace(/\s/g, "");
-    
-    // Decode base64 to binary string then to Uint8Array
-    const binaryStr = window.atob(cleanPem);
-    const bytes = new Uint8Array(binaryStr.length);
-    for (let i = 0; i < binaryStr.length; i++) {
-      bytes[i] = binaryStr.charCodeAt(i);
-    }
-    
-    // Compute SHA-256 hash of the public key bytes
-    const hashBuffer = await window.crypto.subtle.digest("SHA-256", coerceToNative(bytes));
-    
-    // Convert hash buffer to hex
-    const hashHex = Array.from(new Uint8Array(hashBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-      
-    // Format identifier: Take the first 8 hex characters, uppercase
-    return 'UID-' + hashHex.substring(0, 8).toUpperCase();
-  } catch (err) {
-    console.error('Failed to generate key fingerprint:', err);
-    // Secure fallback if crypto fails
-    return 'UID-' + Math.floor(100000 + Math.random() * 900000);
-  }
-}
-
-
-/**
  * Encrypts a symmetric key using a user's RSA public key
  * @param {string} symmetricKey 
  * @param {string} publicKeyPem 
@@ -310,102 +286,10 @@ export function revokeUserAccess(sharedKeys, userId) {
 }
 
 /**
- * Initializes RSA keys for the default simulation users (Doctors, Nurses) if not present.
+ * Helper to get delay based on test or production context.
+ * Returns 1ms during tests to keep execution fast.
  */
-export async function initializeMockUsersKeys() {
-  if (typeof window === 'undefined') return;
-  
-  if (localStorage.getItem('mock_keys_initialized')) return;
-
-  const defaultUsers = [
-    { name: 'Dr. Sarah Miller', role: 'Doctor', organization: 'Cardiology Dept', email: 'sarah.miller@nit.edu' },
-    { name: 'Dr. James Watson', role: 'Doctor', organization: 'Cardiology Dept', email: 'james.watson@health.com' },
-    { name: 'Nurse Kelly Smith', role: 'Nurse', organization: 'General Ward', email: 'kelly.smith@nit.edu' },
-    { name: 'Patient Alex Carter', role: 'Patient', organization: 'Self', email: 'alex.carter@gmail.com' }
-  ];
-
-  const existingUsers = JSON.parse(localStorage.getItem('registered_users') || '[]');
-
-  for (const user of defaultUsers) {
-    const exists = existingUsers.some(u => u.name === user.name);
-    if (!exists) {
-      try {
-        const keyPair = await generateUserKeyPair();
-        const userId = await generatePublicKeyFingerprint(keyPair.publicKey);
-        
-        localStorage.setItem(`user_keys_${user.name}`, JSON.stringify({
-          userId,
-          name: user.name,
-          role: user.role,
-          email: user.email,
-          organization: user.organization,
-          publicKey: keyPair.publicKey,
-          privateKey: keyPair.privateKey
-        }));
-
-        existingUsers.push({
-          userId,
-          name: user.name,
-          role: user.role,
-          organization: user.organization,
-          publicKey: keyPair.publicKey
-        });
-      } catch (e) {
-        console.error("Failed to generate keys for default user", user.name, e);
-      }
-    }
-  }
-
-  localStorage.setItem('registered_users', JSON.stringify(existingUsers));
-  localStorage.setItem('mock_keys_initialized', 'true');
-}
-
 export function getDelay(ms) {
-  const isTest = (typeof globalThis.process !== 'undefined' && (globalThis.process.env?.NODE_ENV === 'test' || globalThis.process.env?.VITEST)) ||
-                 (typeof window !== 'undefined' && (window.vitest || window.vi || window.__vitest_worker__)) ||
-                 (typeof globalThis !== 'undefined' && (globalThis.vitest || globalThis.vi || globalThis.__vitest_worker__));
+  const isTest = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.VITEST);
   return isTest ? 1 : ms;
-}
-
-export function addOnChainTx(sender, action, txHash, blockNumber, status = 'Granted') {
-  if (typeof window === 'undefined') return;
-
-  const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const blockNum = blockNumber || Math.floor(Math.random() * 200) + 413;
-
-  const newTx = {
-    id: txHash || '0x' + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    block: blockNum,
-    sender: sender,
-    action: action,
-    status: status,
-    time: timestampStr
-  };
-
-  const newBlock = {
-    number: blockNum,
-    hash: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    txCount: 1,
-    size: `${(1.1 + Math.random() * 1.5).toFixed(1)} KB`,
-    time: 'Just now',
-    prevHash: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    merkleRoot: '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-    validator: ['peer0.nit.ehealth.org', 'peer1.hospital.ehealth.org', 'peer2.labs.ehealth.org', 'peer3.client.ehealth.org'][Math.floor(Math.random() * 4)]
-  };
-
-  const txs = JSON.parse(localStorage.getItem('explorer_txs') || '[]');
-  localStorage.setItem('explorer_txs', JSON.stringify([newTx, ...txs].slice(0, 100)));
-
-  const blocks = JSON.parse(localStorage.getItem('explorer_blocks') || '[]');
-  localStorage.setItem('explorer_blocks', JSON.stringify([newBlock, ...blocks].slice(0, 100)));
-
-  const feedItem = {
-    id: Date.now(),
-    type: status === 'Denied' ? 'read_denied' : action.includes('Upload') ? 'upload_success' : 'read_success',
-    text: `${sender} performed ${action} (Status: ${status})`,
-    time: 'Just now',
-    role: sender.toLowerCase().includes('nurse') ? 'Nurse' : sender.toLowerCase().includes('patient') ? 'Patient' : 'Doctor'
-  };
-  const feeds = JSON.parse(localStorage.getItem('explorer_feeds') || '[]');
-  localStorage.setItem('explorer_feeds', JSON.stringify([feedItem, ...feeds].slice(0, 50)));
 }

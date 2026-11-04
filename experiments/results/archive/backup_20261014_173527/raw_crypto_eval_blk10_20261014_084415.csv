@@ -1,0 +1,17 @@
+run_id,scheme,action,file_size_kb,recipient_count,repetition,re_encrypted_file,re_uploaded_ipfs,file_crypto_ms,ipfs_re_upload_ms,header_update_ms,total_sharing_latency_ms,request_bytes,response_bytes,success
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,50,3,1,False,False,0.0,0.0,7.508894001148292,7.562024999060668,129,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,50,3,1,True,True,35.563330999139,167.81482899932598,0.0,210.57769399885728,51494,370,True
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,50,3,2,False,False,0.0,0.0,4.503580999880796,4.568674999973155,129,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,50,3,2,True,True,46.417593001024215,149.11869100069453,0.0,200.23531100014225,51494,370,True
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,50,6,1,False,False,0.0,0.0,4.360900000392576,4.422308000357589,192,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,50,6,1,True,True,50.237444000231335,129.65472299947578,0.0,184.81420899843215,51622,374,True
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,50,6,2,False,False,0.0,0.0,6.394828000338748,6.453862000853405,192,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,50,6,2,True,True,42.358389000582974,141.42198900117364,0.0,189.08300400107692,51620,370,True
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,250,3,1,False,False,0.0,0.0,2.719836000323994,2.7656179991026875,132,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,250,3,1,True,True,75.31802499943296,142.4567850008316,0.0,222.6478769989626,256301,372,True
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,250,3,2,False,False,0.0,0.0,4.428852000273764,4.492447998927673,132,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,250,3,2,True,True,63.36343899965868,161.36266500143392,0.0,230.35463400083245,256301,372,True
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,250,6,1,False,False,0.0,0.0,3.844195000056061,3.891657999702147,198,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,250,6,1,True,True,38.03303600034269,124.76158000026771,0.0,168.34300499976962,256435,376,True
+crypto_eval_blk10_20261014_084415,Proposed (BGW Broadcast),share_additional_doctor,250,6,2,False,False,0.0,0.0,3.19947800016962,3.246590998969623,198,74,True
+crypto_eval_blk10_20261014_084415,Baseline (Repeated Re-encryption),share_additional_doctor,250,6,2,True,True,33.029713997166255,154.9843429984321,0.0,194.85391000125674,256435,376,True

@@ -1,0 +1,16 @@
+run_id,experiment,block_size,method,user_scale,user_index,user_id,role,level,latency_ms,comm_bytes,success,cpu_percent
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,5,0,scale_u0,Doctor,L0,6514.315918000193,918,True,1.9
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,5,1,scale_u1,Nurse,L1,6506.370383000103,916,True,2.0
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,5,2,scale_u2,Staff,L2,6472.595039000225,916,True,1.9
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,5,3,scale_u3,Patient,L3,6466.783679999935,920,True,1.1
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,5,4,scale_u4,Doctor,L0,6468.8397429999895,918,True,2.0
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,0,scale_u0,Doctor,L0,4394.397164000111,772,False,2.1
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,1,scale_u1,Nurse,L1,4406.062285999724,771,False,1.8
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,2,scale_u2,Staff,L2,4384.532333000152,771,False,1.6
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,3,scale_u3,Patient,L3,4399.362539999856,773,False,2.9
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,4,scale_u4,Doctor,L0,4379.795369000021,772,False,1.9
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,5,scale_u5,Nurse,L1,6552.86394299992,918,True,2.5
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,6,scale_u6,Staff,L2,6458.992543000022,918,True,1.5
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,7,scale_u7,Patient,L3,6455.9526379998715,922,True,1.7
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,8,scale_u8,Doctor,L0,6453.264941999805,920,True,2.3
+scale_blk10_20260929_062142,figure6_scalability,10,bgw_broadcast,10,9,scale_u9,Nurse,L1,6466.026442999919,918,True,1.4

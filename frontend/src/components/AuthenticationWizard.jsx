@@ -11,7 +11,7 @@ import RoleVerification from './RoleVerification'
 import LoginForm from './LoginForm'
 import BlockchainVerification from './BlockchainVerification'
 
-export default function AuthenticationWizard({ onBackToSelection }) {
+export default function AuthenticationWizard({ demoPreset = null }) {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -19,14 +19,14 @@ export default function AuthenticationWizard({ onBackToSelection }) {
   const [step, setStep] = useState(1)
   const [verifiedUser, setVerifiedUser] = useState(null)
   const [justEnrolledData, setJustEnrolledData] = useState(null)
+  const [credentialData, setCredentialData] = useState(null)
   const [stats, setStats] = useState({ identitiesCount: 142 })
-  const [enteredPassword, setEnteredPassword] = useState('')
 
   // Initialize checks for enrollment redirection & statistics
   useEffect(() => {
     try {
       const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
-      setStats({ identitiesCount: 142 + users.length })
+      setStats({ identitiesCount: users.length })
     } catch (e) {
       console.error(e)
     }
@@ -38,7 +38,9 @@ export default function AuthenticationWizard({ onBackToSelection }) {
         identityId,
         role,
         organization: location.state.organization || 'Consortium Hospital',
-        email: `${name.toLowerCase().replace(/\s+/g, '.')}@health.com`
+        email: location.state.email || JSON.parse(localStorage.getItem(`user_keys_${name}`) || '{}').email || '',
+        passwordHash: location.state.passwordHash || JSON.parse(localStorage.getItem(`user_keys_${name}`) || '{}').passwordHash,
+        passwordSalt: location.state.passwordSalt || JSON.parse(localStorage.getItem(`user_keys_${name}`) || '{}').passwordSalt
       }
       
       setJustEnrolledData(resolvedUser)
@@ -47,7 +49,32 @@ export default function AuthenticationWizard({ onBackToSelection }) {
       setStep(4)
       toast.success(`Identity ${identityId} loaded! Enter password to login.`)
     }
+
+    const refreshStats = () => {
+      try {
+        const users = JSON.parse(localStorage.getItem('registered_users') || '[]')
+        setStats({ identitiesCount: users.length })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    window.addEventListener('demo:users-updated', refreshStats)
+    window.addEventListener('storage', refreshStats)
+
+    return () => {
+      window.removeEventListener('demo:users-updated', refreshStats)
+      window.removeEventListener('storage', refreshStats)
+    }
   }, [location.state])
+
+  useEffect(() => {
+    if (demoPreset?.userName) {
+      setVerifiedUser(null)
+      setCredentialData(null)
+      setStep(2)
+    }
+  }, [demoPreset?.userName])
 
   const handleIdentityFound = (user) => {
     setVerifiedUser(user)
@@ -64,26 +91,20 @@ export default function AuthenticationWizard({ onBackToSelection }) {
   }
 
   const handleCredentialsSubmitted = async (data) => {
-    setEnteredPassword(data.password)
-    // Transition to step 5: Blockchain access timeline check
+    setCredentialData(data)
     setStep(5)
   }
 
   const handleVerificationCompleted = async () => {
     try {
-      // Login with verified details (prefer unique certificate ID/UID to identify user)
-      const identifier = verifiedUser.identityId || verifiedUser.email || `${verifiedUser.name.toLowerCase().replace(/\s+/g, '.')}@health.com`
-      
-      // Call mock login
-      const loggedIn = await login(identifier, enteredPassword, verifiedUser.role)
-      if (!loggedIn) {
-        throw new Error('Invalid credentials')
-      }
+      // Login with verified details
+      const email = verifiedUser.email || verifiedUser.identityId
+      const loggedIn = await login(email, credentialData?.password || '', verifiedUser.role, verifiedUser)
       
       toast.success(`Welcome back, ${loggedIn.name}!`)
       navigate('/dashboard')
     } catch (error) {
-      toast.error(`Blockchain validation failed: ${error.message || 'Session could not be created.'}`)
+      toast.error(error.message || 'Blockchain validation failed: Session could not be created.')
       setStep(4) // Fallback to credentials screen
     }
   }
@@ -107,11 +128,11 @@ export default function AuthenticationWizard({ onBackToSelection }) {
   return (
     <div className="relative">
       
-      {/* Back button */}
-      {((step > 1 && step < 5) || (step === 1 && onBackToSelection)) && !justEnrolledData && (
+      {/* Back button (Only for steps 2 to 4, and not when justEnrolled redirects are locked) */}
+      {step > 1 && step < 5 && !justEnrolledData && (
         <button
-          onClick={step === 1 ? onBackToSelection : handleBack}
-          className="absolute -top-12 left-0 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-705 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          onClick={handleBack}
+          className="absolute -top-12 left-0 flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Back</span>
@@ -148,7 +169,7 @@ export default function AuthenticationWizard({ onBackToSelection }) {
               </p>
             </div>
 
-            {/* Simulated Clinical Graphic for Visual Interest */}
+            {/* Clinical network status graphic */}
             <div className="p-4 bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200/50 dark:border-slate-900 rounded-2xl flex items-center gap-4.5 max-w-md mx-auto lg:mx-0">
               <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-500 text-white rounded-xl shadow-md flex-shrink-0 animate-pulse">
                 <Activity className="w-6 h-6" />
@@ -184,7 +205,12 @@ export default function AuthenticationWizard({ onBackToSelection }) {
             variants={variants}
             transition={{ duration: 0.3 }}
           >
-            <IdentityLookup onIdentityFound={handleIdentityFound} />
+            <IdentityLookup
+              onIdentityFound={handleIdentityFound}
+              initialLookupMethod={demoPreset?.lookupMethod || 'certificateId'}
+              initialSearchValue={demoPreset?.userName || ''}
+              autoSearch={Boolean(demoPreset?.autoSearch)}
+            />
           </motion.div>
         )}
 
@@ -201,7 +227,8 @@ export default function AuthenticationWizard({ onBackToSelection }) {
             <RoleVerification 
               verifiedUser={verifiedUser} 
               onProceed={handleRoleProceed} 
-              onPatientBypass={handlePatientBypass} 
+              onPatientBypass={handlePatientBypass}
+              autoProceed={Boolean(demoPreset?.autoSearch)}
             />
           </motion.div>
         )}
@@ -218,7 +245,8 @@ export default function AuthenticationWizard({ onBackToSelection }) {
           >
             <LoginForm 
               verifiedUser={verifiedUser} 
-              onSubmit={handleCredentialsSubmitted} 
+              onSubmit={handleCredentialsSubmitted}
+              initialPassword={demoPreset?.password || ''}
             />
           </motion.div>
         )}

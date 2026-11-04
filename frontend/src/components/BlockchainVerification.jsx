@@ -6,7 +6,7 @@ const verificationSteps = [
   { id: 2, label: 'Certificate Validity Checked', statusMsg: 'Resolving X.509 certificate status...' },
   { id: 3, label: 'Role ABAC Authorization', statusMsg: 'Checking access policy parameters...' },
   { id: 4, label: 'Consensus Policy Verified', statusMsg: 'Verifying channel signature threshold...' },
-  { id: 5, label: 'Cryptographic Signature Checked', statusMsg: 'Validating RSA credentials...' },
+  { id: 5, label: 'BGW Recipient Key Checked', statusMsg: 'Validating broadcast encryption credentials...' },
   { id: 6, label: 'Session Token Registered', statusMsg: 'Issuing credential ticket...' }
 ]
 

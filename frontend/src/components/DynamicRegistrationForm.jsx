@@ -1,11 +1,11 @@
 import React from 'react'
 import { 
   User, Mail, Phone, Calendar, Hash, Award, 
-  Building, Briefcase, Key, ShieldCheck, Heart, Shield 
+  Building, Briefcase, Key, ShieldCheck, Heart, Shield, Lock
 } from 'lucide-react'
 import ValidationMessage from './ValidationMessage'
 
-export default function DynamicRegistrationForm({ register, errors, role, step, setValue, watch }) {
+export default function DynamicRegistrationForm({ register, errors, role, step }) {
   if (step === 2) {
     return (
       <div className="space-y-4 animate-fade-in-up">
@@ -26,7 +26,7 @@ export default function DynamicRegistrationForm({ register, errors, role, step, 
               <input
                 type="text"
                 {...register('name', { required: 'Full Name is required' })}
-                placeholder="e.g. Dr. Sarah Miller"
+                placeholder="e.g. Dr Ram"
                 className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
               />
             </div>
@@ -58,7 +58,7 @@ export default function DynamicRegistrationForm({ register, errors, role, step, 
             <ValidationMessage error={errors.email} />
           </div>
 
-          {/* Phone */}
+          {/* Phone - Indian format */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
               Phone Number
@@ -72,62 +72,54 @@ export default function DynamicRegistrationForm({ register, errors, role, step, 
                 {...register('phone', { 
                   required: 'Phone number is required',
                   pattern: {
-                    value: /^\+?[1-9]\d{1,14}$/,
-                    message: 'Invalid phone format (e.g. +1234567890)'
+                    value: /^[6-9]\d{9}$/,
+                    message: 'Enter a valid 10-digit Indian phone number starting with 6-9'
                   }
                 })}
-                placeholder="e.g. +14155552671"
+                placeholder="e.g. 9876543210"
                 className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
               />
             </div>
             <ValidationMessage error={errors.phone} />
           </div>
 
-          {/* Account Password */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-              Account Password
+              Create Password
             </label>
             <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                <Lock className="w-4 h-4" />
+              </div>
               <input
                 type="password"
-                {...register('password', { 
-                  required: 'Password is required', 
-                  minLength: { value: 6, message: 'Password must be at least 6 characters' } 
+                {...register('accountPassword', {
+                  required: 'Password is required',
+                  minLength: { value: 8, message: 'Password must be at least 8 characters' }
                 })}
-                placeholder="••••••••"
-                className="w-full bg-slate-50/50 dark:bg-slate-955 border border-slate-202 dark:border-slate-900 rounded-xl px-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-650 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-955 focus:border-transparent transition-all text-sm"
+                placeholder="Create an account password"
+                className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
               />
             </div>
-            <ValidationMessage error={errors.password} />
+            <ValidationMessage error={errors.accountPassword} />
           </div>
 
-          {/* Profile Photo (Avatar) */}
           <div className="space-y-1">
             <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
-              Profile Photo / Avatar Image
+              Confirm Password
             </label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onloadend = () => {
-                    setValue('avatar', reader.result);
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-              className="w-full bg-slate-50/50 dark:bg-slate-955 border border-slate-202 dark:border-slate-900 rounded-xl px-4 py-2 text-slate-900 dark:text-white focus:outline-none text-xs file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-950 dark:file:text-purple-400 cursor-pointer"
-            />
-            {watch && watch('avatar') && (
-              <div className="mt-2 flex items-center gap-2">
-                <img src={watch('avatar')} alt="Preview" className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-800" />
-                <span className="text-[10px] text-slate-500">Photo selected</span>
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                <Lock className="w-4 h-4" />
               </div>
-            )}
+              <input
+                type="password"
+                {...register('confirmPassword', { required: 'Confirm your password' })}
+                placeholder="Re-enter password"
+                className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+              />
+            </div>
+            <ValidationMessage error={errors.confirmPassword} />
           </div>
 
           {/* Patient Details (DOB, Gender, Blood Group) */}
@@ -183,6 +175,438 @@ export default function DynamicRegistrationForm({ register, errors, role, step, 
                   ))}
                 </select>
                 <ValidationMessage error={errors.bloodGroup} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 3) {
+    return (
+      <div className="space-y-4 animate-fade-in-up">
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">
+          Step 3: Professional Information
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Doctor Specific Fields */}
+          {role === 'Doctor' && (
+            <>
+              {/* Reg No */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Medical Registration Number
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Hash className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('regNo', { 
+                      required: 'Medical registration number is required',
+                      pattern: {
+                        value: /^MC-\d{5,8}$/,
+                        message: 'Format must be MC-XXXXX (e.g., MC-98472)'
+                      }
+                    })}
+                    placeholder="e.g. MC-98472"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.regNo} />
+              </div>
+
+              {/* Specialization */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Specialization
+                </label>
+                <select
+                  {...register('specialization', { required: 'Specialization is required' })}
+                  className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm cursor-pointer"
+                >
+                  <option value="">Select Specialization</option>
+                  {['Cardiology', 'Pediatrics', 'Neurology', 'Orthopedics', 'General Medicine', 'Oncology'].map(spec => (
+                    <option key={spec} value={spec}>{spec}</option>
+                  ))}
+                </select>
+                <ValidationMessage error={errors.specialization} />
+              </div>
+
+              {/* Department */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Department
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('department', { required: 'Department is required' })}
+                    placeholder="e.g. Cardiology Department"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.department} />
+              </div>
+
+              {/* Hospital / Organization */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Hospital / Organization
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('organization', { required: 'Organization is required' })}
+                    placeholder="e.g. Metro General Hospital"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.organization} />
+              </div>
+
+              {/* Experience */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Years of Experience
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="number"
+                    {...register('experience', { 
+                      required: 'Experience is required', 
+                      min: { value: 0, message: 'Must be positive' } 
+                    })}
+                    placeholder="e.g. 8"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.experience} />
+              </div>
+
+              {/* License Expiry */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  License Expiry Date
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="date"
+                    {...register('licenseExpiry', { required: 'License Expiry date is required' })}
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.licenseExpiry} />
+              </div>
+            </>
+          )}
+
+          {/* Nurse Specific Fields */}
+          {role === 'Nurse' && (
+            <>
+              {/* Reg No */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Nurse Registration Number
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Hash className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('regNo', { 
+                      required: 'Nurse registration number is required',
+                      pattern: {
+                        value: /^NC-\d{5,8}$/,
+                        message: 'Format must be NC-XXXXX (e.g., NC-82745)'
+                      }
+                    })}
+                    placeholder="e.g. NC-82745"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.regNo} />
+              </div>
+
+              {/* Department */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Department
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('department', { required: 'Department is required' })}
+                    placeholder="e.g. General Ward / ICU"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.department} />
+              </div>
+
+              {/* Shift Type */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Shift Type
+                </label>
+                <select
+                  {...register('shiftType', { required: 'Shift type is required' })}
+                  className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm cursor-pointer"
+                >
+                  <option value="">Select Shift Type</option>
+                  <option value="Day">Day</option>
+                  <option value="Night">Night</option>
+                  <option value="Rotating">Rotating</option>
+                </select>
+                <ValidationMessage error={errors.shiftType} />
+              </div>
+
+              {/* Organization */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Organization
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('organization', { required: 'Organization is required' })}
+                    placeholder="e.g. Metro General Hospital"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.organization} />
+              </div>
+
+              {/* Experience */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Experience (Years)
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Award className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="number"
+                    {...register('experience', { 
+                      required: 'Experience is required',
+                      min: { value: 0, message: 'Must be positive' }
+                    })}
+                    placeholder="e.g. 5"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.experience} />
+              </div>
+            </>
+          )}
+
+          {/* Patient Specific Fields */}
+          {role === 'Patient' && (
+            <>
+              {/* Organization / Hospital */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Hospital / Organization
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('organization', { required: 'Hospital / Organization is required' })}
+                    placeholder="e.g. Metro General Hospital"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.organization} />
+              </div>
+
+              {/* Patient ID */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Patient ID
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Hash className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('patientId', { 
+                      required: 'Patient ID is required',
+                      pattern: {
+                        value: /^PAT-\d{6}$/,
+                        message: 'Format must be PAT-XXXXXX (e.g., PAT-109284)'
+                      }
+                    })}
+                    placeholder="e.g. PAT-109284"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.patientId} />
+              </div>
+            </>
+          )}
+
+          {/* Lab Technician Specific Fields */}
+          {role === 'Lab Technician' && (
+            <>
+              {/* Employee ID */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Lab Employee ID
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Hash className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('employeeId', { 
+                      required: 'Employee ID is required',
+                      pattern: {
+                        value: /^LAB-\d{5}$/,
+                        message: 'Format must be LAB-XXXXX (e.g., LAB-10495)'
+                      }
+                    })}
+                    placeholder="e.g. LAB-10495"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.employeeId} />
+              </div>
+
+              {/* Lab Department */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Lab Department
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('department', { required: 'Lab department is required' })}
+                    placeholder="e.g. Pathology / Microbiology"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.department} />
+              </div>
+
+              {/* Organization */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Organization
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('organization', { required: 'Organization is required' })}
+                    placeholder="e.g. Metro General Hospital"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.organization} />
+              </div>
+            </>
+          )}
+
+          {/* Admin Specific Fields */}
+          {role === 'Admin' && (
+            <>
+              {/* Admin ID */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Admin ID
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('adminId', { 
+                      required: 'Admin ID is required',
+                      pattern: {
+                        value: /^ADM-\d{5}$/,
+                        message: 'Format must be ADM-XXXXX (e.g., ADM-00912)'
+                      }
+                    })}
+                    placeholder="e.g. ADM-00912"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.adminId} />
+              </div>
+
+              {/* Organization */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Organization
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 dark:text-slate-500 group-focus-within:text-purple-500 transition-colors">
+                    <Building className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    {...register('organization', { required: 'Organization is required' })}
+                    placeholder="e.g. NIT JAMSHEDPUR"
+                    className="w-full bg-slate-50/50 dark:bg-slate-950 border border-slate-200 dark:border-slate-900 rounded-xl pl-10 pr-4 py-3 text-slate-900 dark:text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-600 dark:focus:ring-purple-500 focus:bg-white dark:focus:bg-slate-950 focus:border-transparent transition-all text-sm"
+                  />
+                </div>
+                <ValidationMessage error={errors.organization} />
+              </div>
+
+              {/* Security Level */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider block">
+                  Security Clearance Level
+                </label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-emerald-500">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="text"
+                    readOnly
+                    value="Level 0 — Master Consortium Clearance (Full Access)"
+                    className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-10 pr-4 py-3 text-slate-700 dark:text-slate-300 text-sm font-semibold cursor-not-allowed select-none"
+                  />
+                  <input type="hidden" {...register('securityLevel')} value="0" />
+                </div>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                  Administrators are automatically granted Level 0 master smart-contract authority across all consortium data.
+                </p>
               </div>
             </>
           )}

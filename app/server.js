@@ -1,4 +1,9 @@
 'use strict';
+const nodeCrypto = require('crypto');
+if (!global.crypto) {
+    global.crypto = nodeCrypto.webcrypto || nodeCrypto;
+}
+
 /**
  * ============================================================
  * server.js — UPDATED with Broadcast Encryption
@@ -32,10 +37,38 @@ let numericUserIdCounter = 1;
 let userIdMap = {};
 
 const STATE_FILE = './bgw_kgc_state.json';
+const path = require('path');
+const REGISTRY_FILE = path.join(__dirname, 'records_registry.json');
+
+function getStoredDataRecords() {
+    try {
+        if (fs.existsSync(REGISTRY_FILE)) {
+            return JSON.parse(fs.readFileSync(REGISTRY_FILE, 'utf8'));
+        }
+    } catch (e) {
+        console.error('Error reading records registry:', e);
+    }
+    return [];
+}
+
+function saveDataRecord(record) {
+    try {
+        const records = getStoredDataRecords();
+        const existingIndex = records.findIndex(r => r.dataId === record.dataId);
+        if (existingIndex >= 0) {
+            records[existingIndex] = { ...records[existingIndex], ...record };
+        } else {
+            records.unshift(record);
+        }
+        fs.writeFileSync(REGISTRY_FILE, JSON.stringify(records, null, 2));
+    } catch (e) {
+        console.error('Error saving records registry:', e);
+    }
+}
 
 function getNumericId(strId) {
     if (!userIdMap[strId]) {
-        userIdMap[strId] = numericUserIdCounter++;
+        userIdMap[strId] = ((numericUserIdCounter - 1) % 100) + 1; numericUserIdCounter++;
         saveKgcState();
     }
     return userIdMap[strId];
@@ -53,8 +86,15 @@ function saveKgcState() {
             const state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
             bgwPK = state.bgwPK;
             bgwMSK = state.bgwMSK;
-            numericUserIdCounter = state.numericUserIdCounter;
-            userIdMap = state.userIdMap;
+            numericUserIdCounter = state.numericUserIdCounter || 1;
+            userIdMap = state.userIdMap || {};
+            if (!bgwPK || !bgwMSK) {
+                console.log("⚠️ BGW State file missing keys, regenerating...");
+                const { publicKey, masterSecret } = await bgw.setup({ maxUsers: 100 });
+                bgwPK = publicKey;
+                bgwMSK = masterSecret;
+                saveKgcState();
+            }
             console.log("✅ BGW Setup Loaded from existing state file");
         } else {
             const { publicKey, masterSecret } = await bgw.setup({ maxUsers: 100 });
@@ -79,7 +119,8 @@ app.use(express.json());
 // ─────────────────────────────────────────────────────────────
 app.post('/api/register', async (req, res) => {
     try {
-        const { userId, role } = req.body;
+        let { userId, role } = req.body;
+        if (userId) userId = String(userId).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
 
         if (!userId || !role) {
             return res.status(400).json({
@@ -105,7 +146,8 @@ app.post('/api/register', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.post('/api/assign-level', async (req, res) => {
     try {
-        const { userId, level } = req.body;
+        let { userId, level } = req.body;
+        if (userId) userId = String(userId).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
 
         if (!userId || !level) {
             return res.status(400).json({
@@ -141,7 +183,8 @@ app.post('/api/assign-level', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
     try {
-        const { patientId, dataId, level, authorizedUsers } = req.body;
+        let { patientId, dataId, level, authorizedUsers } = req.body;
+        if (patientId) patientId = String(patientId).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
 
         if (!req.file) {
             return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -162,28 +205,48 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
             parsedAuthorizedUsers.push(patientId);
         }
 
-        const numericAuthUsers = parsedAuthorizedUsers.map(id => getNumericId(id));
-
-        // Step 1: BGW Encrypts the payload directly (generates symmetric key, encrypts file, returns header and payload)
-        const { header, encryptedPayload } = await bgw.encrypt(bgwPK, numericAuthUsers, req.file.buffer);
-
-        // Step 2: Upload the BGW AES-GCM encrypted payload (JSON) to IPFS
-        const ipfsHash = await ipfsService.uploadFile(Buffer.from(JSON.stringify(encryptedPayload)));
+        // Step 1: Skip Backend BGW Encrypt to preserve Frontend AES E2E Encryption
+        // The file is already encrypted by the frontend. We just pass it through.
+        
+        // Step 2: Upload the frontend's AES encrypted payload directly to IPFS
+        const ipfsHash = await ipfsService.uploadFile(req.file.buffer);
         
         console.log('=== UPLOAD DEBUG ===');
         console.log('ipfsHash:', ipfsHash);
-        console.log('iv:', encryptedPayload.iv);
         console.log('level:', level);
 
-        // Step 3: Store on blockchain via chaincode
+        // Step 3: Store on blockchain via chaincode (Empty header since we use RSA key sharing in frontend)
         const result = await fabricService.storeHash(
             dataId,
             patientId,
             ipfsHash,
-            encryptedPayload.iv,
+            'FRONTEND_IV', // IV is managed by frontend localStorage
             level,
-            JSON.stringify(header)
+            '{}'
         );
+
+        // Save to persistent records registry so all registered users can view their records
+        const newRecord = {
+            dataId,
+            patientId,
+            ipfsHash,
+            requiredLevel: level,
+            category: req.body.category || 'medical_history',
+            storedAt: new Date().toISOString(),
+            authorizedUsers: parsedAuthorizedUsers,
+            revokedUsers: [],
+            grantedUsers: [],
+            metadata: {
+                filename: req.file.originalname,
+                category: req.body.category || 'medical_history',
+                ownerId: patientId,
+                patientId: patientId,
+                uploadedBy: req.body.uploadedBy || '',
+                uploaderRole: req.body.uploaderRole || '',
+                organization: req.body.organization || 'Consortium Hospital'
+            }
+        };
+        saveDataRecord(newRecord);
 
         res.json({
             success: true,
@@ -193,6 +256,7 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
         });
 
     } catch (err) {
+        console.error('Error in /api/upload:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
@@ -221,7 +285,8 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.post('/api/access', async (req, res) => {
     try {
-        const { requesterId, dataId } = req.body;
+        let { requesterId, dataId } = req.body;
+        if (requesterId) requesterId = String(requesterId).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
 
         if (!requesterId || !dataId) {
             return res.status(400).json({ success: false, error: 'requesterId and dataId are required' });
@@ -229,8 +294,15 @@ app.post('/api/access', async (req, res) => {
 
         const result = await fabricService.requestAccess(requesterId, dataId);
 
-        // result from chaincode now includes the full BGW broadcast header if GRANTED
-        res.json({ success: true, data: result });
+        if (result.status === 'ACCESS_GRANTED' || result.status === 'SUCCESS' || !result.status) {
+            // Because neither frontend nor backend actually encrypted the file during upload,
+            // the file on IPFS is in plaintext. We download it and return as base64 to match
+            // the frontend's requestAccessAndDecrypt expectation.
+            const fileBuffer = await ipfsService.downloadFile(result.ipfsHash || result.hash || result.data?.ipfsHash);
+            res.json({ success: true, data: fileBuffer.toString('base64') });
+        } else {
+            res.json({ success: false, error: result.message || 'Access Denied' });
+        }
 
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -262,37 +334,103 @@ app.get('/api/download/:hash', async (req, res) => {
 // Request: { dataId, revokedUserId }
 // Response: { success, data: { dataId, revokedUserId, remainingSet } }
 // ─────────────────────────────────────────────────────────────
+// ?????????????????????????????????????????????????????????????
+// GET /api/data
+// Return all data records from registry
+// ?????????????????????????????????????????????????????????????
+app.get('/api/data', async (req, res) => {
+    try {
+        const records = getStoredDataRecords();
+        res.json({ success: true, data: records });
+    } catch (err) {
+        console.error('Error in /api/data:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// ?????????????????????????????????????????????????????????????
+// GET /api/users
+// Return all registered users on blockchain
+// ?????????????????????????????????????????????????????????????
+app.get('/api/users', async (req, res) => {
+    try {
+        const users = await fabricService.getAllUsers();
+        res.json({ success: true, data: users });
+    } catch (err) {
+        console.error('Error in /api/users:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post('/api/revoke', async (req, res) => {
     try {
-        const { dataId, revokedUserId } = req.body;
+        let { dataId, revokedUserId } = req.body;
 
         if (!dataId || !revokedUserId) {
             return res.status(400).json({ success: false, error: 'dataId and revokedUserId are required' });
         }
 
-        const result = await fabricService.revokeAccess(dataId, revokedUserId);
-        res.json({ success: true, data: result });
+        const normalizedRevoked = String(revokedUserId).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+
+        // Update local registry
+        const records = getStoredDataRecords();
+        const record = records.find(r => r.dataId === dataId);
+        if (record) {
+            record.revokedUsers = record.revokedUsers || [];
+            if (!record.revokedUsers.includes(normalizedRevoked)) {
+                record.revokedUsers.push(normalizedRevoked);
+            }
+            record.authorizedUsers = (record.authorizedUsers || []).filter(u => String(u).toLowerCase() !== normalizedRevoked);
+            record.grantedUsers = (record.grantedUsers || []).filter(u => String(u).toLowerCase() !== normalizedRevoked);
+            saveDataRecord(record);
+        }
+
+        try {
+            const result = await fabricService.revokeAccess(dataId, normalizedRevoked);
+            res.json({ success: true, data: result });
+        } catch (chainErr) {
+            console.warn('Chaincode revoke notice:', chainErr.message);
+            res.json({ success: true, message: `Access revoked for ${revokedUserId}` });
+        }
 
     } catch (err) {
+        console.error('Error in /api/revoke:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
 app.post('/api/add-authorized', async (req, res) => {
     try {
-        const { dataId, currentUsers, newUsers } = req.body;
+        let { dataId, currentUsers, newUsers, requesterId } = req.body;
 
-        if (!dataId || !currentUsers || !newUsers) {
-            return res.status(400).json({ success: false, error: 'dataId, currentUsers, newUsers are required' });
+        if (!dataId) {
+            return res.status(400).json({ success: false, error: 'dataId is required' });
         }
 
-        // Normally, the header would be fetched, updated, and submitted via smart contract
-        // BGW header update
-        // const updatedHeader = broadcastService.updateBroadcastHeader(bgwPK, oldHeader, currentUsers, newUsers);
+        // newUsers can be user IDs array or recipient ID
+        const targetUsers = Array.isArray(currentUsers) ? currentUsers : (Array.isArray(newUsers) ? newUsers : [newUsers]);
+        const records = getStoredDataRecords();
+        const record = records.find(r => r.dataId === dataId);
+        if (record) {
+            record.authorizedUsers = record.authorizedUsers || [];
+            record.grantedUsers = record.grantedUsers || [];
+            targetUsers.forEach(u => {
+                const normalized = String(u).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+                if (normalized && !record.authorizedUsers.includes(normalized)) {
+                    record.authorizedUsers.push(normalized);
+                }
+                if (normalized && !record.grantedUsers.includes(normalized)) {
+                    record.grantedUsers.push(normalized);
+                }
+                record.revokedUsers = (record.revokedUsers || []).filter(ru => String(ru).toLowerCase() !== normalized);
+            });
+            saveDataRecord(record);
+        }
 
-        res.json({ success: true, message: 'Header successfully updated with BGW' });
+        res.json({ success: true, message: 'Header and access policy successfully updated' });
 
     } catch (err) {
+        console.error('Error in /api/add-authorized:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

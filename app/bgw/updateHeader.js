@@ -3,6 +3,10 @@
 const ctx = require('./context');
 const { computeHeader, normalizeRecipients } = require('./encrypt');
 
+/**
+ * Updates a BGW ciphertext header for a new set of recipient IDs without decrypting the payload.
+ * Requires the 'updateToken' (the randomness t used during initial encryption) to recompute C0 and C1.
+ */
 async function updateHeader(publicKey, header, nextRecipientIds, options = {}) {
   await ctx.init();
 
@@ -30,11 +34,19 @@ async function updateHeader(publicKey, header, nextRecipientIds, options = {}) {
   };
 }
 
+/**
+ * Computes a new BGW header that adds new recipient IDs to the existing set of recipients.
+ * Relies on updateHeader and requires the original encryption's update token.
+ */
 async function addRecipients(publicKey, header, recipientIdsToAdd, options = {}) {
   const next = [...new Set([...(header.recipientIds || []), ...recipientIdsToAdd].map(Number))];
   return updateHeader(publicKey, header, next, options);
 }
 
+/**
+ * Computes a new BGW header that removes specified recipient IDs from the existing set of recipients.
+ * Relies on updateHeader and requires the original encryption's update token.
+ */
 async function removeRecipients(publicKey, header, recipientIdsToRemove, options = {}) {
   const removed = new Set(recipientIdsToRemove.map(Number));
   const next = (header.recipientIds || []).map(Number).filter((id) => !removed.has(id));

@@ -13,11 +13,13 @@ export default function Topbar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
 
-  const notifications = [
-    { id: 1, text: 'Consensus reached for block #592', time: '5m ago', unread: true },
-    { id: 2, text: 'Access request authorized for Dr. Sarah', time: '12m ago', unread: true },
-    { id: 3, text: 'Ledger backup completed successfully', time: '1h ago', unread: false }
-  ]
+  const notifications = []
+  const initials = (user?.name || 'Guest')
+    .split(' ')
+    .map(part => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
   const handleLogout = () => {
     logout()
@@ -74,6 +76,11 @@ export default function Topbar() {
                 </button>
               </div>
               <div className="space-y-2.5">
+                {notifications.length === 0 && (
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 p-1.5">
+                    No new ledger notifications.
+                  </div>
+                )}
                 {notifications.map(n => (
                   <div key={n.id} className="flex justify-between items-start text-[11px] hover:bg-slate-50 dark:hover:bg-slate-950 p-1.5 rounded-lg transition-colors cursor-pointer">
                     <div className="space-y-0.5 max-w-[200px]">
@@ -99,11 +106,9 @@ export default function Topbar() {
             }}
             className="flex items-center space-x-2.5 hover:bg-slate-50 dark:hover:bg-slate-900/40 px-2 py-1.5 rounded-xl transition-all cursor-pointer"
           >
-            <img 
-              src={user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&h=100&q=80'} 
-              alt={user?.name} 
-              className="w-8 h-8 rounded-xl border border-slate-200 dark:border-slate-800 object-cover hover:scale-105 transition-transform duration-200"
-            />
+            <div className="w-8 h-8 rounded-xl border border-slate-200 dark:border-slate-800 bg-purple-600/10 text-purple-600 dark:text-purple-300 flex items-center justify-center text-[11px] font-black">
+              {initials}
+            </div>
             <span className="hidden sm:flex flex-col text-left">
               <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[100px]">{user?.name || 'Guest'}</span>
               <span className="text-[9px] font-medium text-slate-450 dark:text-slate-500 capitalize">{user?.role || 'Guest'}</span>

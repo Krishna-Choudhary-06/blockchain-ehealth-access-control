@@ -8,6 +8,10 @@ const DOMAIN = 'BGW-BE-v1-BLS12-381';
 
 let initPromise;
 
+/**
+ * Initializes the mcl-wasm library with the BLS12-381 curve.
+ * Ensures initialization happens only once and sets up ETH serialization and IRTF mapping.
+ */
 async function init() {
   if (!initPromise) {
     initPromise = mcl.init(CURVE).then(() => {
@@ -23,12 +27,19 @@ async function init() {
   return initPromise;
 }
 
+/**
+ * Checks if the BGW context has been initialized.
+ * Throws an error if init() has not been called yet.
+ */
 function assertReady() {
   if (!initPromise) {
     throw new Error('BGW context is not initialized. Call await bgw.init() first.');
   }
 }
 
+/**
+ * Generates a random field element (Fr) using a Cryptographically Secure Pseudo-Random Number Generator.
+ */
 function randomFr() {
   assertReady();
   const x = new mcl.Fr();
@@ -36,6 +47,9 @@ function randomFr() {
   return x;
 }
 
+/**
+ * Deserializes a field element (Fr) from a hex string.
+ */
 function frFromHex(hex) {
   assertReady();
   const x = new mcl.Fr();
@@ -43,7 +57,10 @@ function frFromHex(hex) {
   return x;
 }
 
-function hashToFr(value, label = 'fr') {
+/**
+ * Hashes an arbitrary value (with an optional label) to a field element (Fr) using SHA-256.
+ */
+function hashToFr(value, label = 'fr') {   //code that generate the hashsing
   assertReady();
   const digest = crypto
     .createHash('sha256')
@@ -55,16 +72,25 @@ function hashToFr(value, label = 'fr') {
   return x;
 }
 
+/**
+ * Generates a G1 generator point by hashing a domain-separated label and mapping it to the G1 curve.
+ */
 function generatorG1(label = 'g1') {
   assertReady();
   return mcl.hashAndMapToG1(`${DOMAIN}:${label}`);
 }
 
+/**
+ * Generates a G2 generator point by hashing a domain-separated label and mapping it to the G2 curve.
+ */
 function generatorG2(label = 'g2') {
   assertReady();
   return mcl.hashAndMapToG2(`${DOMAIN}:${label}`);
 }
 
+/**
+ * Returns the identity element (zero) of the G1 group.
+ */
 function oneG1() {
   assertReady();
   const z = new mcl.G1();
@@ -72,6 +98,9 @@ function oneG1() {
   return z;
 }
 
+/**
+ * Returns the identity element (zero) of the G2 group.
+ */
 function oneG2() {
   assertReady();
   const z = new mcl.G2();
@@ -79,22 +108,37 @@ function oneG2() {
   return z;
 }
 
+/**
+ * Serializes a field element (Fr) to a hex string.
+ */
 function serializeFr(x) {
   return x.serializeToHexStr();
 }
 
+/**
+ * Serializes a G1 element to a hex string.
+ */
 function serializeG1(x) {
   return x.serializeToHexStr();
 }
 
+/**
+ * Serializes a G2 element to a hex string.
+ */
 function serializeG2(x) {
   return x.serializeToHexStr();
 }
 
+/**
+ * Serializes a GT element to a hex string.
+ */
 function serializeGT(x) {
   return x.serializeToHexStr();
 }
 
+/**
+ * Deserializes a G1 element from a hex string.
+ */
 function deserializeG1(hex) {
   assertReady();
   const x = new mcl.G1();
@@ -102,6 +146,9 @@ function deserializeG1(hex) {
   return x;
 }
 
+/**
+ * Deserializes a G2 element from a hex string.
+ */
 function deserializeG2(hex) {
   assertReady();
   const x = new mcl.G2();
@@ -109,6 +156,9 @@ function deserializeG2(hex) {
   return x;
 }
 
+/**
+ * Deserializes a GT element from a hex string.
+ */
 function deserializeGT(hex) {
   assertReady();
   const x = new mcl.GT();
@@ -116,6 +166,9 @@ function deserializeGT(hex) {
   return x;
 }
 
+/**
+ * Strips the '0x' prefix from a hex string if present.
+ */
 function strip0x(hex) {
   if (typeof hex !== 'string') {
     throw new TypeError('Expected a hex string.');
@@ -123,6 +176,9 @@ function strip0x(hex) {
   return hex.startsWith('0x') ? hex.slice(2) : hex;
 }
 
+/**
+ * Normalizes an input value into a Buffer, handling strings, Buffers, null, and objects.
+ */
 function normalizeBuffer(value) {
   if (Buffer.isBuffer(value)) return value;
   if (value == null) return Buffer.alloc(0);
@@ -130,12 +186,18 @@ function normalizeBuffer(value) {
   return Buffer.from(JSON.stringify(value), 'utf8');
 }
 
+/**
+ * Derives a symmetric key from a GT element using HMAC-based Key Derivation Function (HKDF).
+ */
 function kdfFromGT(gt, info = 'payload') {
   const ikm = Buffer.from(serializeGT(gt), 'hex');
   const salt = crypto.createHash('sha256').update(`${DOMAIN}:salt`).digest();
   return crypto.hkdfSync('sha256', ikm, salt, `${DOMAIN}:${info}`, 32);
 }
 
+/**
+ * Encrypts plaintext using AES-256-GCM with the provided key and optional Additional Authenticated Data (AAD).
+ */
 function aesGcmEncrypt(key, plaintext, aad) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -151,6 +213,9 @@ function aesGcmEncrypt(key, plaintext, aad) {
   };
 }
 
+/**
+ * Decrypts AES-256-GCM encrypted data using the provided key and optional AAD.
+ */
 function aesGcmDecrypt(key, encrypted, aad) {
   const decipher = crypto.createDecipheriv(
     'aes-256-gcm',
@@ -166,12 +231,18 @@ function aesGcmDecrypt(key, encrypted, aad) {
   ]);
 }
 
+/**
+ * Asserts that the provided value is a safe positive integer.
+ */
 function assertPositiveInteger(value, name) {
   if (!Number.isSafeInteger(value) || value < 1) {
     throw new RangeError(`${name} must be a positive safe integer.`);
   }
 }
 
+/**
+ * Asserts that a recipient ID is valid and within the expected range of public parameter n.
+ */
 function assertRecipientId(id, n) {
   assertPositiveInteger(id, 'recipient id');
   if (id > n) {
