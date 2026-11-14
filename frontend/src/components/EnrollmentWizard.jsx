@@ -177,9 +177,9 @@ export default function EnrollmentWizard() {
       else if (formData.role === 'Nurse') securityLvl = 'L2'
       else if (formData.role === 'Lab Technician') securityLvl = 'L1'
       else if (formData.role === 'Patient') securityLvl = 'L0'
-      if (formData.securityLevel && ['0', '1', '2', '3'].includes(String(formData.securityLevel))) {
-        securityLvl = 'L' + formData.securityLevel
-      }
+      // if (formData.securityLevel && ['0', '1', '2', '3'].includes(String(formData.securityLevel))) {
+      //   securityLvl = 'L' + formData.securityLevel
+      // }
       if (formData.role === 'Admin') {
         securityLvl = 'L0'
       }

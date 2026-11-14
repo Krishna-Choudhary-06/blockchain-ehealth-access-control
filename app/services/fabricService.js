@@ -254,6 +254,19 @@ async function getDataRecord(dataId) {
     }
 }
 
+async function getUserLevel(userId) {
+    const { contract, gateway } = await getContract();
+    try {
+        const result = await contract.evaluateTransaction(
+            'PrivacyLevel:getLevel',
+            userId
+        );
+        return JSON.parse(result.toString());
+    } finally {
+        gateway.disconnect();
+    }
+}
+
 module.exports = {
     registerUser,
     assignLevel,
@@ -263,5 +276,7 @@ module.exports = {
     addAuthorizedUser,
     getLogs,
     getAllUsers,
-    getDataRecord
+    getDataRecord,
+    getDataRecord,
+    getUserLevel
 };

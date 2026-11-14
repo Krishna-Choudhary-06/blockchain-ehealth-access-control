@@ -709,7 +709,7 @@ export default function Dashboard() {
       } else if (normalizedRole === 'Lab Technician' || normalizedRole === 'Lab') {
         hasPolicyClearance = (recordSensitivity !== 'L0')
       } else if (normalizedRole === 'Nurse') {
-        hasPolicyClearance = (recordSensitivity === 'L1' || recordSensitivity === 'L2' || recordSensitivity === 'L3')
+        hasPolicyClearance = (recordSensitivity === 'L2' || recordSensitivity === 'L3')
       } else {
         hasPolicyClearance = roleCanAccessLevel(normalizedRole, recordSensitivity)
       }
