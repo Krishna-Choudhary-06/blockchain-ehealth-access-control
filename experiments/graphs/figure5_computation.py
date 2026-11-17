@@ -13,8 +13,9 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-PROCESSED_FILE = "/home/krishna/internship-blockchain-health/experiments/results/processed/computation_summary.csv"
-FIGURES_DIR = "/home/krishna/internship-blockchain-health/experiments/results/figures"
+PROCESSED_DIR = os.environ.get("PROCESSED_DIR", "/home/krishna/internship-blockchain-health/experiments/results/processed")
+FIGURES_DIR = os.environ.get("FIGURES_DIR", "/home/krishna/internship-blockchain-health/experiments/results/figures")
+PROCESSED_FILE = os.path.join(PROCESSED_DIR, "computation_summary.csv")
 
 # Publication styling
 plt.rcParams.update({
@@ -74,19 +75,23 @@ def generate_figure5():
 
         # Filter by rate type
         if p["rate_type"] == "low":
-            r_sub = sub[sub["workload"] <= 5]
+            r_sub = sub[sub["workload"] <= 15]
         else:
-            r_sub = sub[sub["workload"] > 5]
+            r_sub = sub[sub["workload"] >= 20]
 
         if r_sub.empty:
             r_sub = sub
+
+        # Prefer pure cryptographic CPU processing time if available, otherwise total execution time
+        metric_col = "avg_cpu_user_ms" if "avg_cpu_user_ms" in r_sub.columns and (r_sub["avg_cpu_user_ms"] > 0).any() else "avg_execution_time_ms"
+        y_label = "CPU Processing Time (ms)" if metric_col == "avg_cpu_user_ms" else "Execution Time (ms)"
 
         ax.set_title(p["title"], fontsize=12, fontweight="bold")
         for method in r_sub["method"].unique():
             m_sub = r_sub[r_sub["method"] == method].sort_values("workload")
             ax.plot(
                 m_sub["workload"], 
-                m_sub["avg_execution_time_ms"], 
+                m_sub[metric_col], 
                 marker=METHOD_MARKERS.get(method, "o"), 
                 linewidth=2,
                 markersize=7,
@@ -94,13 +99,14 @@ def generate_figure5():
                 label=METHOD_LABELS.get(method, method.replace("_", " ").title())
             )
             for _, row in m_sub.iterrows():
-                ax.annotate(f"{row['avg_execution_time_ms']:.1f} ms",
-                            xy=(row["workload"], row["avg_execution_time_ms"]),
+                val = row[metric_col]
+                ax.annotate(f"{val:.1f} ms",
+                            xy=(row["workload"], val),
                             xytext=(0, 6), textcoords="offset points",
                             ha="center", va="bottom", fontsize=8.5, fontweight="bold")
 
         ax.set_xlabel("Transaction Workload (Number of Transactions)", fontsize=10)
-        ax.set_ylabel("Execution Time (ms)", fontsize=10)
+        ax.set_ylabel(y_label, fontsize=10)
         ax.grid(True, linestyle="--", alpha=0.6)
         ax.legend(fontsize=9, loc="upper left")
 

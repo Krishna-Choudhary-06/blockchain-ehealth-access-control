@@ -1,9 +1,20 @@
 'use strict';
 const { Contract } = require('fabric-contract-api');
 
+const ROLE_PERMISSIONS = {
+    'Doctor': ['L0', 'L1', 'L2', 'L3'],
+    'Nurse': ['L1', 'L2', 'L3'],
+    'Lab Technician': ['L1', 'L3'],
+    'Admin': ['L3'],          // Decentralized control: Admin only has L3 (system/audit/billing); no clinical data without explicit patient consent
+    'Accountant': ['L3'],
+    'Patient': ['L0', 'L1', 'L2', 'L3']
+};
+
 class DataAccess extends Contract {
 
     async requestAccess(ctx, requesterId, dataId) {
+        requesterId = String(requesterId || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+
         const userBytes = await ctx.stub.getState(`USER_${requesterId}`);
         if (!userBytes || userBytes.length === 0) {
             return JSON.stringify({ status: 'ACCESS_DENIED', message: 'Requester is not registered', ipfsHash: null });
@@ -25,16 +36,57 @@ class DataAccess extends Contract {
         }
         const dataRecord = JSON.parse(dataBytes.toString());
 
-        if (requesterLevel.levelNum > dataRecord.requiredLevelNum) {
-            await this._logAccess(ctx, requesterId, dataId, 'DENIED', 'Insufficient level');
-            return JSON.stringify({ status: 'ACCESS_DENIED', message: `Insufficient access level. Yours: ${requesterLevel.level}, Required: ${dataRecord.requiredLevel}`, ipfsHash: null });
+        // 1. Revocation check
+        const revokedUsers = (dataRecord.revokedUsers || []).map(u => String(u).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, ''));
+        if (revokedUsers.includes(requesterId)) {
+            await this._logAccess(ctx, requesterId, dataId, 'DENIED', 'Access revoked by patient');
+            return JSON.stringify({ status: 'ACCESS_DENIED', message: 'Access revoked by patient consent policy', ipfsHash: null });
         }
 
+        // 2. Ownership check: Patient always has access to their own record
+        const patientId = String(dataRecord.patientId || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+        const isOwner = (requesterId === patientId);
+
+        // 3. Explicit consent grant check
         const broadcastHeader = dataRecord.broadcastHeader || {};
-        
-        // BGW provides cryptographic access control. 
-        // If a user is not in the authorized set, their BLS12-381 private key will simply fail to decrypt the AES key.
-        // The chaincode only enforces role/privacy levels.
+        const headerRecipients = Array.isArray(broadcastHeader.recipientIds) ? broadcastHeader.recipientIds : Object.keys(broadcastHeader);
+        const grantedUsers = (dataRecord.grantedUsers || []).map(u => String(u).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, ''));
+        const authorizedUsers = (dataRecord.authorizedUsers || []).map(u => String(u).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, ''));
+        const isExplicitlyGranted = grantedUsers.includes(requesterId) || authorizedUsers.includes(requesterId) || headerRecipients.map(String).includes(requesterId);
+
+        // 4. Role-based Access Control (ABAC) with Decentralized Admin restrictions
+        const userRole = user.role || 'Patient';
+        let matchedRole = 'Patient';
+        for (const roleKey of Object.keys(ROLE_PERMISSIONS)) {
+            if (roleKey.toLowerCase().replace(/[^a-z0-9]/g, '') === userRole.toLowerCase().replace(/[^a-z0-9]/g, '')) {
+                matchedRole = roleKey;
+                break;
+            }
+        }
+
+        const requiredLevel = dataRecord.requiredLevel || 'L0';
+
+        if (!isOwner && !isExplicitlyGranted) {
+            // Decentralized Admin Rule: Admin has NO automatic access to patient clinical files (L0, L1, L2).
+            if (matchedRole === 'Admin' && requiredLevel !== 'L3') {
+                await this._logAccess(ctx, requesterId, dataId, 'DENIED', 'Admin denied clinical access without patient consent');
+                return JSON.stringify({
+                    status: 'ACCESS_DENIED',
+                    message: 'Decentralized Privacy Protection: Administrator does not possess clinical clearance (L0-L2) without explicit patient consent.',
+                    ipfsHash: null
+                });
+            }
+
+            const allowedLevels = ROLE_PERMISSIONS[matchedRole] || [];
+            if (!allowedLevels.includes(requiredLevel)) {
+                await this._logAccess(ctx, requesterId, dataId, 'DENIED', `Insufficient role clearance: ${matchedRole} cannot access ${requiredLevel}`);
+                return JSON.stringify({
+                    status: 'ACCESS_DENIED',
+                    message: `Access Denied: Clearance level ${requiredLevel} is required. Role '${matchedRole}' has insufficient security clearance.`,
+                    ipfsHash: null
+                });
+            }
+        }
 
         await this._logAccess(ctx, requesterId, dataId, 'GRANTED', '');
         return JSON.stringify({
@@ -44,7 +96,7 @@ class DataAccess extends Contract {
             ipfsHash:           dataRecord.ipfsHash,
             iv:                 dataRecord.iv,
             broadcastHeader:    broadcastHeader,
-            authorizedUsers:    broadcastHeader.recipientIds || [],
+            authorizedUsers:    headerRecipients,
             accessGrantedAt:    this._getTimestamp(ctx)
         });
     }

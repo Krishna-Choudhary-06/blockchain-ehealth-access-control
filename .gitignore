@@ -31,6 +31,8 @@ logs/
 *.id
 app/wallet/
 wallet/
+app/bgw_kgc_state.json
+app/records_registry.json
 
 # Python virtual environment and caches
 .venv/

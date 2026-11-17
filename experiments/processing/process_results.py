@@ -17,8 +17,8 @@ import pandas as pd
 import numpy as np
 from typing import Dict, Any, List
 
-RAW_DIR = "/home/krishna/internship-blockchain-health/experiments/results/raw"
-PROCESSED_DIR = "/home/krishna/internship-blockchain-health/experiments/results/processed"
+RAW_DIR = os.environ.get("RAW_DIR", "/home/krishna/internship-blockchain-health/experiments/results/raw")
+PROCESSED_DIR = os.environ.get("PROCESSED_DIR", "/home/krishna/internship-blockchain-health/experiments/results/processed")
 
 def process_all_raw_results():
     os.makedirs(PROCESSED_DIR, exist_ok=True)

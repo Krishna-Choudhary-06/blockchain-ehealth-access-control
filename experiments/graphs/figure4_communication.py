@@ -14,8 +14,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-PROCESSED_FILE = "/home/krishna/internship-blockchain-health/experiments/results/processed/communication_summary.csv"
-FIGURES_DIR = "/home/krishna/internship-blockchain-health/experiments/results/figures"
+PROCESSED_DIR = os.environ.get("PROCESSED_DIR", "/home/krishna/internship-blockchain-health/experiments/results/processed")
+FIGURES_DIR = os.environ.get("FIGURES_DIR", "/home/krishna/internship-blockchain-health/experiments/results/figures")
+PROCESSED_FILE = os.path.join(PROCESSED_DIR, "communication_summary.csv")
 
 # Publication styling
 plt.rcParams.update({
@@ -71,9 +72,9 @@ def generate_figure4():
 
         # Filter by rate type
         if p["rate_type"] == "low":
-            r_sub = sub[sub["workload"] <= 5]
+            r_sub = sub[sub["workload"] <= 15]
         else:
-            r_sub = sub[sub["workload"] > 5]
+            r_sub = sub[sub["workload"] >= 20]
 
         if r_sub.empty:
             r_sub = sub

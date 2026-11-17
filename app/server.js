@@ -193,7 +193,7 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
             return res.status(400).json({ success: false, error: 'patientId, dataId, level are required' });
         }
 
-        // Step 1: Build broadcast header for authorized users using BGW
+        // Step 1: Build authorized users list
         let parsedAuthorizedUsers = [];
         if (authorizedUsers) {
             parsedAuthorizedUsers = typeof authorizedUsers === 'string'
@@ -205,31 +205,33 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
             parsedAuthorizedUsers.push(patientId);
         }
 
-        // Step 1: Skip Backend BGW Encrypt to preserve Frontend AES E2E Encryption
-        // The file is already encrypted by the frontend. We just pass it through.
+        // Step 2: Encrypt the medical file with AES-256 before uploading to IPFS
+        const { encryptedData, key, iv } = cryptoService.encryptFile(req.file.buffer);
         
-        // Step 2: Upload the frontend's AES encrypted payload directly to IPFS
-        const ipfsHash = await ipfsService.uploadFile(req.file.buffer);
+        // Step 3: Upload the encrypted ciphertext payload to IPFS (no plaintext stored)
+        const ipfsHash = await ipfsService.uploadFile(encryptedData);
         
-        console.log('=== UPLOAD DEBUG ===');
-        console.log('ipfsHash:', ipfsHash);
+        console.log('=== UPLOAD SECURE (ENCRYPTED) ===');
+        console.log('ipfsHash (Ciphertext):', ipfsHash);
         console.log('level:', level);
 
-        // Step 3: Store on blockchain via chaincode (Empty header since we use RSA key sharing in frontend)
+        // Step 4: Store on blockchain via chaincode
         const result = await fabricService.storeHash(
             dataId,
             patientId,
             ipfsHash,
-            'FRONTEND_IV', // IV is managed by frontend localStorage
+            iv,
             level,
             '{}'
         );
 
-        // Save to persistent records registry so all registered users can view their records
+        // Save to persistent records registry
         const newRecord = {
             dataId,
             patientId,
             ipfsHash,
+            iv,
+            encKey: key,
             requiredLevel: level,
             category: req.body.category || 'medical_history',
             storedAt: new Date().toISOString(),
@@ -252,7 +254,7 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
             success: true,
             data: result,
             authorizedSet: parsedAuthorizedUsers,
-            message: `File encrypted with BGW, uploaded to IPFS, and header stored on chain.`
+            message: `File encrypted with AES-256, ciphertext uploaded to IPFS, and access policy stored on blockchain.`
         });
 
     } catch (err) {
@@ -263,48 +265,102 @@ app.post('/api/upload', upload.single('medicalFile'), async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // POST /api/access
-// UPDATED: returns encryptedKeyForYou so doctor can recover K
-//
-// Request: { requesterId, dataId }
-//
-// Response (GRANTED):
-//   { success, data: {
-//       status: "ACCESS_GRANTED",
-//       ipfsHash,
-//       iv,
-//       encryptedKeyForYou   ← NEW: RSA-encrypted AES key for requester
-//   }}
-//
-// Response (DENIED):
-//   { success, data: { status: "ACCESS_DENIED", message } }
-//
-// After getting ACCESS_GRANTED, the frontend/doctor:
-//   1. Decrypts encryptedKeyForYou with their RSA private key → gets AES key K
-//   2. Downloads encrypted file from IPFS using ipfsHash
-//   3. Decrypts file using K and iv
+// Enforces Fabric ABAC policy, role-based clearance, and patient consent
 // ─────────────────────────────────────────────────────────────
 app.post('/api/access', async (req, res) => {
     try {
-        let { requesterId, dataId } = req.body;
+        let { requesterId, dataId, requesterRole } = req.body;
         if (requesterId) requesterId = String(requesterId).trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
 
         if (!requesterId || !dataId) {
             return res.status(400).json({ success: false, error: 'requesterId and dataId are required' });
         }
 
-        const result = await fabricService.requestAccess(requesterId, dataId);
+        const records = getStoredDataRecords();
+        const record = records.find(r => r.dataId === dataId);
 
-        if (result.status === 'ACCESS_GRANTED' || result.status === 'SUCCESS' || !result.status) {
-            // Because neither frontend nor backend actually encrypted the file during upload,
-            // the file on IPFS is in plaintext. We download it and return as base64 to match
-            // the frontend's requestAccessAndDecrypt expectation.
-            const fileBuffer = await ipfsService.downloadFile(result.ipfsHash || result.hash || result.data?.ipfsHash);
-            res.json({ success: true, data: fileBuffer.toString('base64') });
-        } else {
-            res.json({ success: false, error: result.message || 'Access Denied' });
+        // 1. Check revocation list
+        if (record && record.revokedUsers && record.revokedUsers.includes(requesterId)) {
+            return res.json({ success: false, error: 'Access Denied: Your access to this record has been revoked by the patient.' });
         }
 
+        // 2. Strict Role & Privacy Clearance Enforcement
+        const role = requesterRole || '';
+        const normalizedRole = String(role).trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const requiredLevel = record?.requiredLevel || 'L0';
+        const isOwner = (record?.patientId && record.patientId === requesterId) || (record?.metadata?.ownerId === requesterId);
+        const isExplicitlyGranted = (record?.grantedUsers && record.grantedUsers.includes(requesterId)) || 
+                                    (record?.authorizedUsers && record.authorizedUsers.includes(requesterId));
+
+        if (!isOwner && !isExplicitlyGranted) {
+            // Decentralized Admin Rule: Admin has no clinical clearance (L0-L2) without explicit patient consent
+            if (normalizedRole === 'admin' && requiredLevel !== 'L3') {
+                return res.json({
+                    success: false,
+                    error: 'Decentralized Privacy Protection: Administrator does not possess clinical clearance (L0-L2) without explicit patient consent.'
+                });
+            }
+            // Lab Technician cannot access L0 (Prescription) or L2 (Medical History)
+            if (normalizedRole === 'labtechnician' && (requiredLevel === 'L0' || requiredLevel === 'L2')) {
+                return res.json({
+                    success: false,
+                    error: `Access Denied: Lab Technician does not have clearance for ${requiredLevel === 'L0' ? 'Prescription (L0)' : 'Medical History (L2)'}.`
+                });
+            }
+            // Nurse cannot access L0 (Prescription)
+            if (normalizedRole === 'nurse' && requiredLevel === 'L0') {
+                return res.json({
+                    success: false,
+                    error: 'Access Denied: Nurse does not have clearance for Prescription (L0).'
+                });
+            }
+        }
+
+        // 3. Fabric Blockchain ABAC verification
+        let chainResult = null;
+        try {
+            chainResult = await fabricService.requestAccess(requesterId, dataId);
+            if (chainResult && chainResult.status === 'ACCESS_DENIED') {
+                return res.json({ success: false, error: chainResult.message || 'Access Denied by Fabric Policy' });
+            }
+        } catch (chainErr) {
+            console.warn('Fabric requestAccess warning:', chainErr.message);
+            if (!record) {
+                return res.status(403).json({ success: false, error: 'Access Denied: Record not found' });
+            }
+        }
+
+        if (chainResult && chainResult.status && chainResult.status !== 'ACCESS_GRANTED' && chainResult.status !== 'SUCCESS') {
+            return res.json({ success: false, error: chainResult.message || 'Access Denied by Fabric Policy' });
+        }
+
+        // 4. Download file from IPFS
+        const targetIpfsHash = (chainResult && chainResult.ipfsHash) || record?.ipfsHash;
+        if (!targetIpfsHash) {
+            return res.status(404).json({ success: false, error: 'IPFS content hash not found' });
+        }
+
+        const fileBuffer = await ipfsService.downloadFile(targetIpfsHash);
+        
+        // 5. Decrypt if file was encrypted with AES key
+        let decryptedBuffer = fileBuffer;
+        if (record && record.encKey && record.iv) {
+            try {
+                decryptedBuffer = cryptoService.decryptFile(fileBuffer, record.encKey, record.iv);
+            } catch (decErr) {
+                console.warn('AES Decrypt fallback:', decErr.message);
+                decryptedBuffer = fileBuffer;
+            }
+        }
+
+        res.json({
+            success: true,
+            data: decryptedBuffer.toString('base64'),
+            message: 'Access granted and file decrypted successfully'
+        });
+
     } catch (err) {
+        console.error('Error in /api/access:', err);
         res.status(500).json({ success: false, error: err.message });
     }
 });

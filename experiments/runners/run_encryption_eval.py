@@ -179,7 +179,7 @@ def run_encryption_evaluation(file_sizes_kb: List[int] = None, recipient_counts:
                       f"(Re-enc: {base_res_dict['file_crypto_ms']:.1f}ms, IPFS: {base_res_dict['ipfs_re_upload_ms']:.1f}ms)")
 
     df = pd.DataFrame(records)
-    out_dir = "/home/krishna/internship-blockchain-health/experiments/results/raw"
+    out_dir = os.environ.get("RAW_DIR", "/home/krishna/internship-blockchain-health/experiments/results/raw")
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, f"raw_{run_id}.csv")
     df.to_csv(csv_path, index=False)

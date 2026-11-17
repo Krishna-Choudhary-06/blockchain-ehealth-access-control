@@ -12,8 +12,9 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-PROCESSED_FILE = "/home/krishna/internship-blockchain-health/experiments/results/processed/scalability_summary.csv"
-FIGURES_DIR = "/home/krishna/internship-blockchain-health/experiments/results/figures"
+PROCESSED_DIR = os.environ.get("PROCESSED_DIR", "/home/krishna/internship-blockchain-health/experiments/results/processed")
+FIGURES_DIR = os.environ.get("FIGURES_DIR", "/home/krishna/internship-blockchain-health/experiments/results/figures")
+PROCESSED_FILE = os.path.join(PROCESSED_DIR, "scalability_summary.csv")
 
 # Publication styling
 plt.rcParams.update({

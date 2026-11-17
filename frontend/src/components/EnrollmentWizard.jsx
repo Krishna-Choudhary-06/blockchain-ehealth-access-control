@@ -170,18 +170,18 @@ export default function EnrollmentWizard() {
       const apiResult = await registerUser(identityId, keyPair.publicKey, formData.role)
       if (!apiResult.success) throw new Error(apiResult.error || 'Registration failed')
       
-      // Paper privacy model: L0 is most restrictive (highest authority), L3 is public.
+      // Decentralized privacy model: Admin manages infrastructure (L3); Doctors have clinical clearance (L0); Nurses/Lab Techs have departmental clearance (L1); Patients own L0.
       let securityLvl = 'L2'
-      if (formData.role === 'Admin') securityLvl = 'L0'
+      if (formData.role === 'Admin') securityLvl = 'L3'
       else if (formData.role === 'Doctor') securityLvl = 'L0'
-      else if (formData.role === 'Nurse') securityLvl = 'L2'
+      else if (formData.role === 'Nurse') securityLvl = 'L1'
       else if (formData.role === 'Lab Technician') securityLvl = 'L1'
       else if (formData.role === 'Patient') securityLvl = 'L0'
       if (formData.securityLevel && ['0', '1', '2', '3'].includes(String(formData.securityLevel))) {
         securityLvl = 'L' + formData.securityLevel
       }
       if (formData.role === 'Admin') {
-        securityLvl = 'L0'
+        securityLvl = 'L3'
       }
 
       setEnrollmentProgress('Assigning Privacy Level on Fabric...')

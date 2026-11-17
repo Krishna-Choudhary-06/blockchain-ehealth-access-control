@@ -599,13 +599,13 @@ export default function DynamicRegistrationForm({ register, errors, role, step }
                   <input
                     type="text"
                     readOnly
-                    value="Level 0 — Master Consortium Clearance (Full Access)"
+                    value="Level 3 — Infrastructure & Consortium Administration"
                     className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-10 pr-4 py-3 text-slate-700 dark:text-slate-300 text-sm font-semibold cursor-not-allowed select-none"
                   />
-                  <input type="hidden" {...register('securityLevel')} value="0" />
+                  <input type="hidden" {...register('securityLevel')} value="3" />
                 </div>
                 <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
-                  Administrators are automatically granted Level 0 master smart-contract authority across all consortium data.
+                  Decentralized Infrastructure: Administrators manage blockchain nodes, certificates, and audit telemetry (L3). Patient medical data (L0-L2) is strictly inaccessible without explicit patient consent.
                 </p>
               </div>
             </>
