@@ -17,7 +17,7 @@ export const roleAccessMap = {
   Doctor: ['L0', 'L1', 'L2', 'L3'],
   Nurse: ['L1', 'L2', 'L3'],
   'Lab Technician': ['L1', 'L3'],
-  Admin: ['L2', 'L3'],
+  Admin: ['L3'], // Decentralized: Admin has L3 only; clinical records (L0-L2) require explicit patient consent
   Accountant: ['L3']
 }
 

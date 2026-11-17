@@ -106,7 +106,9 @@ def collect_system_metadata(run_id: str, block_size: int = 10) -> Dict[str, Any]
     }
     return meta
 
-def save_metadata(metadata: Dict[str, Any], output_dir: str = "/home/krishna/internship-blockchain-health/experiments/results/metadata"):
+def save_metadata(metadata: Dict[str, Any], output_dir: str = None):
+    if output_dir is None:
+        output_dir = os.environ.get("METADATA_DIR", "/home/krishna/internship-blockchain-health/experiments/results/metadata")
     os.makedirs(output_dir, exist_ok=True)
     filename = f"experiment_metadata_{metadata['run_id']}.json"
     filepath = os.path.join(output_dir, filename)

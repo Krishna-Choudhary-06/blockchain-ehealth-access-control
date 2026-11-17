@@ -8,7 +8,18 @@ set -e
 REPO_DIR="/home/krishna/internship-blockchain-health"
 FABRIC_DIR="/home/krishna/fabric-samples/test-network"
 CONFIGTX_FILE="$FABRIC_DIR/configtx/configtx.yaml"
-PYTHON_BIN="$REPO_DIR/experiments/.venv/bin/python3"
+# Robust Python virtual environment detection & auto-healing
+VENV_DIR="$REPO_DIR/experiments/.venv"
+if [ ! -f "$VENV_DIR/bin/python3" ]; then
+    echo "[Setup] Creating dedicated Python virtual environment for experiments..."
+    rm -rf "$VENV_DIR"
+    python3 -m venv "$VENV_DIR"
+    "$VENV_DIR/bin/pip" install --upgrade pip --quiet
+    "$VENV_DIR/bin/pip" install -r "$REPO_DIR/experiments/requirements.txt" --quiet
+    echo "  ✓ Python virtual environment created and dependencies installed."
+fi
+PYTHON_BIN="$VENV_DIR/bin/python3"
+
 NODE_BIN="/home/krishna/.nvm/versions/node/v18.19.0/bin/node"
 
 export PATH="/home/krishna/.nvm/versions/node/v18.19.0/bin:$PATH"
@@ -53,9 +64,11 @@ for BS in "${BLOCK_SIZES[@]}"; do
     echo ">>> CONFIGURING BLOCK SIZE: $BS (MaxMessageCount: $BS) <<<"
     echo "######################################################################"
 
-    # 1. Update configtx.yaml
+    # 1. Update configtx.yaml (BatchSize and BatchTimeout)
     sed -i "s/MaxMessageCount: [0-9]*/MaxMessageCount: $BS/" "$CONFIGTX_FILE"
+    sed -i "s/BatchTimeout: .*/BatchTimeout: 500ms/" "$CONFIGTX_FILE"
     grep -n "MaxMessageCount:" "$CONFIGTX_FILE"
+    grep -n "BatchTimeout:" "$CONFIGTX_FILE"
 
     # 2. Restart Fabric Network from scratch with guaranteed container cleanup
     cd "$FABRIC_DIR"
@@ -90,14 +103,14 @@ for BS in "${BLOCK_SIZES[@]}"; do
         # Figure 2: Latency vs. Load (10, 25, 50 txs)
         $PYTHON_BIN runners/run_latency.py --workloads 10 25 50 --method "$MTH"
         
-        # Figure 3: Throughput (Concurrency 2: Low Rate, Concurrency 5: High Rate)
-        $PYTHON_BIN runners/run_throughput.py --concurrency 2 5 --method "$MTH"
+        # Figure 3: Throughput (Concurrency sequence: 1 2 3 for Low Rate, 5 8 10 for High Rate)
+        $PYTHON_BIN runners/run_throughput.py --concurrency 1 2 3 5 8 10 --method "$MTH"
         
-        # Figure 4: Communication Overhead (Workload 5: Low Rate, Workload 10: High Rate)
-        $PYTHON_BIN runners/run_communication.py --workloads 5 10 --method "$MTH"
+        # Figure 4: Communication Overhead (Workload sequence: 5 10 15 for Low Rate, 20 25 30 for High Rate)
+        $PYTHON_BIN runners/run_communication.py --workloads 5 10 15 20 25 30 --method "$MTH"
         
-        # Figure 5: Computation Overhead (Workload 5: Low Rate, Workload 10: High Rate)
-        $PYTHON_BIN runners/run_computation.py --workloads 5 10 --method "$MTH"
+        # Figure 5: Computation Overhead (Workload sequence: 5 10 15 for Low Rate, 20 25 30 for High Rate)
+        $PYTHON_BIN runners/run_computation.py --workloads 5 10 15 20 25 30 --method "$MTH"
     done
 done
 

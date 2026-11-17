@@ -84,7 +84,7 @@ def run_communication_benchmark(workloads: List[int] = None, method_name: str = 
             })
 
     df = pd.DataFrame(raw_records)
-    out_dir = "/home/krishna/internship-blockchain-health/experiments/results/raw"
+    out_dir = os.environ.get("RAW_DIR", "/home/krishna/internship-blockchain-health/experiments/results/raw")
     os.makedirs(out_dir, exist_ok=True)
     csv_path = os.path.join(out_dir, f"raw_{run_id}.csv")
     df.to_csv(csv_path, index=False)

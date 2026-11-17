@@ -300,6 +300,30 @@ export default function Dashboard() {
           throw new Error(`User identity not found for ${user?.name}. Please log in again.`)
         }
 
+        const isOwner = isUserRecordOwner(record, requesterId) || isOwnedByCurrentPatient(record)
+        const isExplicitlyGranted = (Array.isArray(record.grantedUsers) && record.grantedUsers.includes(requesterId)) ||
+                                    (Array.isArray(record.authorizedUsers) && record.authorizedUsers.includes(requesterId))
+        const isRevoked = Array.isArray(record.revokedUsers) && record.revokedUsers.includes(requesterId)
+
+        if (isRevoked) {
+          throw new Error('Access Denied: Your access to this record was revoked by the patient.')
+        }
+
+        if (!isOwner && !isExplicitlyGranted) {
+          if (role === 'Admin' && record.sensitivity !== 'L3') {
+            throw new Error('Decentralized Privacy Protection: Administrator does not possess clinical clearance (L0-L2) without explicit patient consent.')
+          }
+          if (role === 'Lab Technician' && (record.sensitivity === 'L0' || record.sensitivity === 'L2')) {
+            throw new Error(`Access Denied: Lab Technician role cannot view ${record.sensitivity === 'L0' ? 'Prescriptions (L0)' : 'Medical History (L2)'}.`)
+          }
+          if (role === 'Nurse' && record.sensitivity === 'L0') {
+            throw new Error('Access Denied: Nurse role cannot view Prescriptions (L0).')
+          }
+          if (!roleCanAccessLevel(role, record.sensitivity)) {
+            throw new Error(`Access Denied: Your role (${role}) has insufficient clearance for ${record.sensitivity} records.`)
+          }
+        }
+
         const response = await requestAccessAndDecrypt(
           requesterId,
           record.id,
@@ -637,12 +661,18 @@ export default function Dashboard() {
 
   // Helper check for clearance badges (implementing Section 5 Access Matrix)
   const getRoleAccess = (sensitivity, roleToCheck) => {
-    if (roleToCheck === 'Doctor') return true
-    if (roleToCheck === 'Lab') return sensitivity !== 'L0'
-    if (roleToCheck === 'Nurse') return (sensitivity === 'L2' || sensitivity === 'L3')
-    if (roleToCheck === 'Staff') return (sensitivity === 'L2' || sensitivity === 'L3')
-    if (roleToCheck === 'Public') return sensitivity === 'L3'
-    return false
+    const roleMap = {
+      'Doctor': 'Doctor',
+      'Nurse': 'Nurse',
+      'Lab': 'Lab Technician',
+      'Lab Technician': 'Lab Technician',
+      'Admin': 'Admin',
+      'Staff': 'Nurse',
+      'Public': 'Public'
+    }
+    const mapped = roleMap[roleToCheck] || roleToCheck
+    if (mapped === 'Public') return sensitivity === 'L3'
+    return roleCanAccessLevel(mapped, sensitivity)
   }
 
   // Calculate all effective authorized users (Owner + Explicit Grants + ABAC Policy Clinicians - Revoked)
@@ -1029,14 +1059,31 @@ export default function Dashboard() {
                     </button>
                   </>
                 ) : record.ipfsHash ? (
-                  <>
-                    <button
-                      onClick={() => handleDecrypt(record)}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm"
-                    >
-                      View / Decrypt
-                    </button>
-                  </>
+                  (() => {
+                    const isRevoked = currentKeys.userId && record.revokedUsers?.includes(currentKeys.userId)
+                    const isAuthorizedByConsent = (Array.isArray(record.grantedUsers) && record.grantedUsers.includes(currentKeys.userId || currentUserId)) ||
+                                                  (Array.isArray(record.authorizedUsers) && record.authorizedUsers.includes(currentKeys.userId || currentUserId))
+                    const hasRoleClearance = roleCanAccessLevel(role, record.sensitivity)
+                    const canView = isAuthorizedByConsent || (hasRoleClearance && role !== 'Admin')
+
+                    if (isRevoked) {
+                      return <span className="px-3 py-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold">Access Revoked</span>
+                    }
+                    if (!canView) {
+                      if (role === 'Admin') {
+                        return <span className="px-3 py-1.5 bg-slate-100 dark:bg-slate-950 text-slate-400 dark:text-slate-500 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800" title="Admin access requires explicit patient consent">No Patient Consent</span>
+                      }
+                      return <span className="px-3 py-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-xs font-bold border border-amber-500/20">Clearance Required ({record.sensitivity})</span>
+                    }
+                    return (
+                      <button
+                        onClick={() => handleDecrypt(record)}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-sm"
+                      >
+                        View / Decrypt
+                      </button>
+                    )
+                  })()
                 ) : (
                   <span className="px-4 py-2 bg-slate-100 dark:bg-slate-950 text-slate-500 dark:text-slate-400 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-800">
                     Legacy Record
@@ -1132,6 +1179,10 @@ export default function Dashboard() {
             const authUsers = Array.isArray(record.authorizedUsers) ? record.authorizedUsers : []
             const revUsers = Array.isArray(record.revokedUsers) ? record.revokedUsers : []
             const effectiveAuthUsers = getComprehensiveAuthorizedUsers(record)
+            const isAuthorizedByConsent = (Array.isArray(record.grantedUsers) && record.grantedUsers.includes(currentKeys.userId || currentUserId)) ||
+                                          (Array.isArray(record.authorizedUsers) && record.authorizedUsers.includes(currentKeys.userId || currentUserId))
+            const hasRoleClearance = roleCanAccessLevel(role, record.sensitivity)
+            const canView = isPatientOwner || isUploader || isAuthorizedByConsent || (hasRoleClearance && role !== 'Admin')
             return (
               <div key={record.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 p-5 rounded-3xl shadow-sm space-y-4">
                 {/* Row 1: File name + badge + actions */}
@@ -1152,7 +1203,13 @@ export default function Dashboard() {
                       <span className="px-3 py-1.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-[11px] font-bold">Revoked</span>
                     ) : isBgwRecord ? (
                       <>
-                        <button onClick={() => handleDecrypt(record)} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[11px] font-bold cursor-pointer">View / Decrypt</button>
+                        {canView ? (
+                          <button onClick={() => handleDecrypt(record)} className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-[11px] font-bold cursor-pointer">View / Decrypt</button>
+                        ) : role === 'Admin' ? (
+                          <span className="px-3 py-1.5 bg-slate-100 dark:bg-slate-950 text-slate-400 dark:text-slate-500 rounded-xl text-[10px] font-bold border border-slate-200 dark:border-slate-800" title="Admin access requires explicit patient consent">No Patient Consent</span>
+                        ) : (
+                          <span className="px-3 py-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl text-[10px] font-bold border border-amber-500/20" title={`Role ${role} does not have clearance for ${record.sensitivity}`}>Clearance Required ({record.sensitivity})</span>
+                        )}
                         {isUploader && (
                           <>
                             <button onClick={() => { setGrantMode('grant'); setGrantRecord(record) }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-bold cursor-pointer">Grant</button>
