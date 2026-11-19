@@ -498,7 +498,35 @@ app.post('/api/add-authorized', async (req, res) => {
 app.get('/api/logs', async (req, res) => {
     try {
         const logs = await fabricService.getLogs();
-        res.json({ success: true, data: logs });
+        const userCache = {};
+        const dataCache = {};
+
+        const lookupUser = async (id) => {
+            if (!(id in userCache)) {
+                try { userCache[id] = (await fabricService.getUserLevel(id)).level; }
+                catch { userCache[id] = null; }
+            }
+            return userCache[id];
+        };
+        const lookupData = async (id) => {
+            if (!(id in dataCache)) {
+                try { dataCache[id] = (await fabricService.getDataRecord(id)).requiredLevel; }
+                catch { dataCache[id] = null; }
+            }
+            return dataCache[id];
+        };
+
+        const enriched = [];
+        for (const log of logs) {
+            enriched.push({
+                ...log,
+                action: log.action || log.status,
+                time: log.time || log.timestamp,
+                requesterLevel: log.requesterLevel || await lookupUser(log.requesterId),
+                dataLevel: log.dataLevel || await lookupData(log.dataId)
+            });
+        }
+        res.json({ success: true, data: enriched });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
